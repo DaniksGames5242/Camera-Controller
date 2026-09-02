@@ -6,8 +6,10 @@ import android.view.ViewGroup
 import android.widget.TextView
 import androidx.recyclerview.widget.RecyclerView
 
-class DeviceAdapter(private val onClick: (DeviceWithId) -> Unit) :
-    RecyclerView.Adapter<DeviceAdapter.ViewHolder>() {
+class DeviceAdapter(
+    private val onClick: (DeviceWithId) -> Unit,
+    private val onLongClick: (DeviceWithId) -> Unit,
+) : RecyclerView.Adapter<DeviceAdapter.ViewHolder>() {
 
     private var devices: List<DeviceWithId> = emptyList()
 
@@ -39,5 +41,10 @@ class DeviceAdapter(private val onClick: (DeviceWithId) -> Unit) :
         holder.dot.setBackgroundResource(if (online) R.drawable.dot_online else R.drawable.dot_offline)
         holder.itemView.alpha = if (online) 1f else 0.5f
         holder.itemView.setOnClickListener { if (online) onClick(device) }
+        // Long-press to forget a device — mainly useful for offline
+        // leftovers (e.g. a reinstalled agent, which registers under a new
+        // record if this one is never cleaned up), but allowed for any
+        // device since a stale "online" entry can also happen.
+        holder.itemView.setOnLongClickListener { onLongClick(device); true }
     }
 }

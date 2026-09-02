@@ -68,6 +68,15 @@ object Signaling {
         roomRef("devices").removeEventListener(listener)
     }
 
+    /**
+     * Forgets a device record outright — e.g. one left behind by a
+     * reinstalled or decommissioned agent. A device that comes back online
+     * afterwards just re-registers itself.
+     */
+    fun forgetDevice(deviceId: String) {
+        roomRef("devices/$deviceId").removeValue()
+    }
+
     fun createCall(targetDeviceId: String): String {
         val ref = roomRef("calls/$targetDeviceId").push()
         ref.setValue(mapOf("createdAt" to System.currentTimeMillis(), "status" to "pending"))

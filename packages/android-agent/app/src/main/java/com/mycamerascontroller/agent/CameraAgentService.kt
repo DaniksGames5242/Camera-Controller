@@ -1,5 +1,6 @@
 package com.mycamerascontroller.agent
 
+import android.app.AlarmManager
 import android.app.Notification
 import android.app.NotificationChannel
 import android.app.NotificationManager
@@ -8,7 +9,10 @@ import android.app.Service
 import android.content.Intent
 import android.content.pm.ServiceInfo
 import android.os.Build
+import android.os.Handler
 import android.os.IBinder
+import android.os.Looper
+import android.os.SystemClock
 import androidx.core.app.NotificationCompat
 import org.webrtc.*
 
@@ -33,6 +37,15 @@ class CameraAgentService : Service() {
     private var surfaceTextureHelper: SurfaceTextureHelper? = null
 
     private var stopIncomingCallListener: (() -> Unit)? = null
+
+    private val heartbeatHandler = Handler(Looper.getMainLooper())
+    private val heartbeatIntervalMs = 20_000L
+    private val heartbeatRunnable = object : Runnable {
+        override fun run() {
+            if (::deviceId.isInitialized) Signaling.heartbeat(deviceId)
+            heartbeatHandler.postDelayed(this, heartbeatIntervalMs)
+        }
+    }
 
     private val iceServers = listOf(
         PeerConnection.IceServer.builder("stun:stun.l.google.com:19302").createIceServer(),
@@ -63,6 +76,7 @@ class CameraAgentService : Service() {
             stopIncomingCallListener = Signaling.onIncomingCall(deviceId) { callId, offer ->
                 handleIncomingCall(callId, offer)
             }
+            heartbeatHandler.postDelayed(heartbeatRunnable, heartbeatIntervalMs)
         }
     }
 
@@ -70,7 +84,27 @@ class CameraAgentService : Service() {
 
     override fun onBind(intent: Intent?): IBinder? = null
 
+    // Swiping the app away from Recents doesn't stop a plain (unbound)
+    // foreground service on stock Android, but a number of OEM skins
+    // (MIUI, EMUI, ColorOS, etc.) kill it anyway to save battery, ignoring
+    // both the foreground state and the battery-optimization exemption the
+    // user granted. This can't be fully prevented from app code — those
+    // skins need their own "autostart"/"no restrictions" toggle enabled by
+    // the user — but scheduling an immediate restart here at least recovers
+    // on stock/AOSP-based devices where the service was actually stopped.
+    override fun onTaskRemoved(rootIntent: Intent?) {
+        val restartIntent = Intent(applicationContext, CameraAgentService::class.java)
+        val pendingIntent = PendingIntent.getService(
+            applicationContext, 1, restartIntent,
+            PendingIntent.FLAG_ONE_SHOT or PendingIntent.FLAG_IMMUTABLE
+        )
+        val alarmManager = getSystemService(ALARM_SERVICE) as AlarmManager
+        alarmManager.set(AlarmManager.ELAPSED_REALTIME, SystemClock.elapsedRealtime() + 1000, pendingIntent)
+        super.onTaskRemoved(rootIntent)
+    }
+
     override fun onDestroy() {
+        heartbeatHandler.removeCallbacks(heartbeatRunnable)
         stopIncomingCallListener?.invoke()
         Signaling.setOffline(deviceId)
         endActiveCall()

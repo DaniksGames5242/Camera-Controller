@@ -7,6 +7,7 @@ import {
   onAnswerSet,
   onRemoteIceCandidates,
   endCall,
+  forgetDevice,
   createPeerConnection,
   type DeviceWithId,
   type IceCandidatePayload,
@@ -40,6 +41,21 @@ function renderList() {
     row.innerHTML = `<span class="dot ${d.status}"></span><span class="device-name">${d.name}</span>`;
     if (d.status === 'online') {
       row.onclick = () => openViewer(d.id);
+    } else {
+      // Offline devices can be forgotten — e.g. a reinstalled agent leaves
+      // its old record behind forever otherwise (it never gets a new
+      // heartbeat, but nothing ever deletes it either).
+      const forgetBtn = document.createElement('button');
+      forgetBtn.className = 'forget-btn';
+      forgetBtn.textContent = '✕';
+      forgetBtn.title = 'Забыть устройство';
+      forgetBtn.onclick = (e) => {
+        e.stopPropagation();
+        if (confirm(`Удалить "${d.name}" из списка? Если оно снова выйдет в сеть, появится заново.`)) {
+          forgetDevice(d.id);
+        }
+      };
+      row.appendChild(forgetBtn);
     }
     listEl.appendChild(row);
   }

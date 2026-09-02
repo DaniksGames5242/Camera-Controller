@@ -4,4 +4,6 @@
     <string name="close">Закрыть</string>
     <string name="status_online">в сети</string>
     <string name="status_offline">не в сети</string>
+    <string name="forget_device_confirm">Удалить это устройство из списка? Если оно снова выйдет в сеть, появится заново.</string>
+    <string name="forget_device">Забыть</string>
 </resources>

@@ -95,8 +95,26 @@ jobs:
           package com.mycamerascontroller.agent
           object RoomConfig { const val ROOM_ID = "${{ secrets.ROOM_ID }}" }
           EOF
+      # A fresh CI runner has no debug.keystore, so Gradle would mint a new
+      # random one every run. Besides breaking ANDROID_ID stability (the
+      # agent's device identity — see DeviceIdentity.kt) across releases,
+      # Android refuses to install an update signed with a different key
+      # than what's already installed, forcing an uninstall each time.
+      # Caching the keystore keeps it identical release to release.
+      - uses: actions/cache@v4
+        with:
+          path: ~/.android/debug.keystore
+          key: android-debug-keystore-agent-v1
+      - name: Ensure a debug keystore exists
+        run: |
+          mkdir -p ~/.android
+          if [ ! -f ~/.android/debug.keystore ]; then
+            keytool -genkeypair -v -keystore ~/.android/debug.keystore -storepass android \
+              -alias androiddebugkey -keypass android -keyalg RSA -keysize 2048 -validity 10000 \
+              -dname "CN=Android Debug,O=Android,C=US"
+          fi
       - uses: gradle/actions/setup-gradle@v4
-      # Debug build: auto-signed with a throwaway per-machine key, which is all a
+      # Debug build: signed with the keystore cached above, which is all a
       # sideloaded personal-use APK needs — no release keystore to manage/secure.
       - run: gradle assembleDebug
       # Gradle names every debug APK "app-debug.apk" — rename before upload so
@@ -130,6 +148,21 @@ jobs:
           package com.mycamerascontroller.client
           object RoomConfig { const val ROOM_ID = "${{ secrets.ROOM_ID }}" }
           EOF
+      # Keeps the client signed with the same key release to release, so an
+      # update installs cleanly over a previous version instead of requiring
+      # an uninstall first (Android rejects a signature mismatch).
+      - uses: actions/cache@v4
+        with:
+          path: ~/.android/debug.keystore
+          key: android-debug-keystore-client-v1
+      - name: Ensure a debug keystore exists
+        run: |
+          mkdir -p ~/.android
+          if [ ! -f ~/.android/debug.keystore ]; then
+            keytool -genkeypair -v -keystore ~/.android/debug.keystore -storepass android \
+              -alias androiddebugkey -keypass android -keyalg RSA -keysize 2048 -validity 10000 \
+              -dname "CN=Android Debug,O=Android,C=US"
+          fi
       - uses: gradle/actions/setup-gradle@v4
       - run: gradle assembleDebug
       # Gradle names every debug APK "app-debug.apk" — rename before upload so

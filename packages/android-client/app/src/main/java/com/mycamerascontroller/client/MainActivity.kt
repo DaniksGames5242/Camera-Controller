@@ -1,5 +1,6 @@
 package com.mycamerascontroller.client
 
+import android.app.AlertDialog
 import android.content.Intent
 import android.os.Bundle
 import android.widget.TextView
@@ -20,13 +21,23 @@ class MainActivity : AppCompatActivity() {
         val list = findViewById<RecyclerView>(R.id.deviceList)
         val emptyText = findViewById<TextView>(R.id.emptyText)
         list.layoutManager = LinearLayoutManager(this)
-        adapter = DeviceAdapter { device ->
-            startActivity(
-                Intent(this, ViewerActivity::class.java)
-                    .putExtra(ViewerActivity.EXTRA_DEVICE_ID, device.id)
-                    .putExtra(ViewerActivity.EXTRA_DEVICE_NAME, device.record.name)
-            )
-        }
+        adapter = DeviceAdapter(
+            onClick = { device ->
+                startActivity(
+                    Intent(this, ViewerActivity::class.java)
+                        .putExtra(ViewerActivity.EXTRA_DEVICE_ID, device.id)
+                        .putExtra(ViewerActivity.EXTRA_DEVICE_NAME, device.record.name)
+                )
+            },
+            onLongClick = { device ->
+                AlertDialog.Builder(this)
+                    .setTitle(device.record.name)
+                    .setMessage(R.string.forget_device_confirm)
+                    .setPositiveButton(R.string.forget_device) { _, _ -> Signaling.forgetDevice(device.id) }
+                    .setNegativeButton(android.R.string.cancel, null)
+                    .show()
+            },
+        )
         list.adapter = adapter
 
         Signaling.init {

@@ -82,6 +82,15 @@ export function listenDevices(cb: (devices: DeviceWithId[]) => void): Unsubscrib
   });
 }
 
+/**
+ * Forgets a device record outright — e.g. one left behind by a reinstalled
+ * or decommissioned agent. A device that comes back online afterwards just
+ * re-registers itself (registerDevice writes with set(), not update()).
+ */
+export function forgetDevice(deviceId: string) {
+  remove(deviceRef(deviceId));
+}
+
 // ---------- calls (one viewing session) ----------
 
 type CallRole = 'caller' | 'callee';
