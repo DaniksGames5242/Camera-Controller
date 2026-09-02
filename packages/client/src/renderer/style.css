@@ -75,18 +75,21 @@ canvas#stage-gl {
   z-index: 0;
 }
 
+/* Positioned off-screen rather than zero/near-zero size: Chromium throttles
+   or entirely suspends decode for <video> elements with a near-zero laid-out
+   box, which silently produced a black/no-signal texture for every camera —
+   the element must have a real, normal-sized box to keep decoding at full
+   rate; it just doesn't need to be inside the viewport to do it. */
 #video-vault {
   position: fixed;
-  left: -10px;
-  top: -10px;
-  width: 2px;
-  height: 2px;
-  overflow: hidden;
-  opacity: 0.001;
+  left: -100000px;
+  top: 0;
+  width: 640px;
+  height: 360px;
   pointer-events: none;
   z-index: -1;
 }
-#video-vault video { width: 2px; height: 2px; }
+#video-vault video { width: 640px; height: 360px; }
 
 /* --------------------------------------------------------------------------
    Layer that carries DOM welded onto the 3D slabs. Children are positioned
@@ -140,29 +143,6 @@ canvas#stage-gl {
     inset -1px 0 0 rgba(53, 230, 255, 0.20),
     inset 40px 0 80px -70px rgba(139, 107, 255, 0.9);
   overflow: hidden;
-}
-
-/* A slow light sweep down the rail's inner edge — the panel is being lit by
-   the emitter below the stage, not by a flat fill. */
-#rail::after {
-  content: '';
-  position: absolute;
-  inset: 0;
-  pointer-events: none;
-  background: linear-gradient(
-    to bottom,
-    transparent 0%,
-    rgba(53, 230, 255, 0.055) 42%,
-    rgba(139, 107, 255, 0.05) 58%,
-    transparent 100%
-  );
-  background-size: 100% 260%;
-  animation: railSweep 11s linear infinite;
-}
-
-@keyframes railSweep {
-  from { background-position: 0 -160%; }
-  to { background-position: 0 160%; }
 }
 
 .rail-edge {
@@ -678,6 +658,8 @@ kbd {
    ========================================================================== */
 
 #dock {
+  --dock-clip: polygon(14px 0, calc(100% - 14px) 0, 100% 50%, calc(100% - 14px) 100%, 14px 100%, 0 50%);
+  position: relative;
   grid-column: 2;
   justify-self: center;
   display: flex;
@@ -687,9 +669,27 @@ kbd {
   margin-bottom: 8px;
   background: rgba(6, 16, 25, 0.55);
   backdrop-filter: blur(12px) saturate(140%);
-  border: 1px solid rgba(53, 230, 255, 0.16);
-  clip-path: polygon(14px 0, calc(100% - 14px) 0, 100% 50%, calc(100% - 14px) 100%, 14px 100%, 0 50%);
+  clip-path: var(--dock-clip);
   box-shadow: 0 10px 40px rgba(0, 0, 0, 0.55), inset 0 1px 0 rgba(53, 230, 255, 0.2);
+}
+
+/* A plain `border` gets clipped away along with everything else outside
+   `clip-path` — including its own straight edges, which is why the chamfered
+   left/right sides of this hexagon had no visible stroke at all. Painting
+   the stroke as a mask-cut ring (the same technique as .node::before) and
+   applying the identical clip-path to that ring keeps it following the
+   chamfer instead of a rectangle. */
+#dock::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  padding: 1px;
+  background: linear-gradient(90deg, rgba(53, 230, 255, 0.55), rgba(139, 107, 255, 0.4), rgba(53, 230, 255, 0.55));
+  clip-path: var(--dock-clip);
+  -webkit-mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0);
+  -webkit-mask-composite: xor;
+  mask-composite: exclude;
+  pointer-events: none;
 }
 
 .dock-btn {
@@ -795,25 +795,6 @@ kbd {
   padding: 26px 30px;
   color: #eafcff;
   opacity: 0;
-}
-
-.slab-scan {
-  position: absolute;
-  left: 0;
-  right: 0;
-  height: 3px;
-  top: 0;
-  background: linear-gradient(90deg, transparent, rgba(72, 255, 192, 0.9), transparent);
-  filter: blur(1px);
-  animation: slabScan 4.2s cubic-bezier(0.5, 0, 0.5, 1) infinite;
-  opacity: 0.55;
-}
-
-@keyframes slabScan {
-  0% { top: 2%; opacity: 0; }
-  10% { opacity: 0.7; }
-  90% { opacity: 0.7; }
-  100% { top: 98%; opacity: 0; }
 }
 
 .slab-top {
@@ -973,11 +954,16 @@ kbd {
 
 .console-grid {
   display: grid;
-  grid-template-columns: repeat(3, 1fr);
+  /* minmax(0, 1fr) rather than a bare 1fr: a plain 1fr column still floors
+     at its content's intrinsic width, so the FPS field (a bold 26px number
+     plus a unit label) was pushing its column wider than the grid had room
+     for and spilling past the slab's own edge — the 0 minimum is what lets
+     a column actually shrink to fit. */
+  grid-template-columns: repeat(3, minmax(0, 1fr));
   gap: 20px;
 }
 
-.field { display: flex; flex-direction: column; gap: 9px; }
+.field { display: flex; flex-direction: column; gap: 9px; min-width: 0; }
 
 .field-key {
   font-size: 12px;
@@ -991,6 +977,7 @@ kbd {
   align-items: baseline;
   gap: 8px;
   padding-bottom: 8px;
+  min-width: 0;
 }
 
 .field-input {
@@ -1354,6 +1341,91 @@ kbd {
 .palette-footer span { display: inline-flex; align-items: center; gap: 5px; }
 
 /* ==========================================================================
+   Confirm — a destructive action asked about in the app's own voice
+   ========================================================================== */
+
+.confirm-scrim {
+  --reveal: 0;
+  position: fixed;
+  inset: 0;
+  z-index: 85;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(2, 6, 12, calc(var(--reveal) * 0.68));
+  backdrop-filter: blur(calc(var(--reveal) * 6px));
+}
+
+.confirm-scrim[hidden] { display: none !important; }
+
+.confirm-panel {
+  position: relative;
+  width: min(420px, 82vw);
+  padding: 30px 32px 26px;
+  background: linear-gradient(165deg, rgba(20, 10, 14, 0.95), rgba(8, 4, 6, 0.96));
+  border: 1px solid rgba(255, 77, 94, 0.4);
+  box-shadow: 0 40px 100px rgba(0, 0, 0, 0.7), 0 0 60px rgba(255, 77, 94, 0.14);
+  transform: translateY(calc((1 - var(--reveal)) * -24px)) scale(calc(0.94 + var(--reveal) * 0.06));
+  opacity: var(--reveal);
+  clip-path: polygon(0 0, calc(100% - 16px) 0, 100% 16px, 100% 100%, 16px 100%, 0 calc(100% - 16px));
+}
+
+.confirm-panel .corner {
+  position: absolute;
+  width: 13px;
+  height: 13px;
+  border: 1px solid var(--red);
+  opacity: 0.85;
+}
+
+.confirm-panel .corner.tl { left: 6px; top: 6px; border-right: 0; border-bottom: 0; }
+.confirm-panel .corner.tr { right: 6px; top: 6px; border-left: 0; border-bottom: 0; }
+.confirm-panel .corner.bl { left: 6px; bottom: 6px; border-right: 0; border-top: 0; }
+.confirm-panel .corner.br { right: 6px; bottom: 6px; border-left: 0; border-top: 0; }
+
+.confirm-title {
+  margin: 0 0 12px;
+  font-size: 16px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  color: #ffe0e3;
+  text-shadow: 0 0 18px rgba(255, 77, 94, 0.5);
+}
+
+.confirm-body {
+  margin: 0 0 26px;
+  font-size: 12.5px;
+  line-height: 1.7;
+  color: rgba(220, 200, 205, 0.8);
+}
+
+.confirm-actions { display: flex; gap: 12px; justify-content: flex-end; }
+
+.confirm-btn {
+  padding: 12px 26px;
+  border: 1px solid rgba(53, 230, 255, 0.35);
+  background: transparent;
+  color: var(--ink);
+  font-family: inherit;
+  font-size: 12px;
+  letter-spacing: 0.16em;
+  cursor: none;
+  transition: background 0.2s ease, border-color 0.2s ease;
+}
+
+.confirm-btn.ghost:hover { background: rgba(120, 160, 190, 0.14); }
+
+.confirm-btn.go {
+  border-color: var(--red);
+  color: #2a0709;
+  background: linear-gradient(120deg, var(--red), var(--magenta));
+  font-weight: 700;
+  box-shadow: 0 0 30px rgba(255, 77, 94, 0.35);
+}
+
+.confirm-btn.go:hover { filter: brightness(1.12); }
+
+/* ==========================================================================
    Toasts
    ========================================================================== */
 
@@ -1478,5 +1550,5 @@ kbd {
     animation-iteration-count: 1 !important;
     transition-duration: 0.12s !important;
   }
-  .slab-scan, .brand-rule i { display: none; }
+  .brand-rule i { display: none; }
 }

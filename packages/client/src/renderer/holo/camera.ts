@@ -52,11 +52,6 @@ export class Camera {
     this.idleTimer = 0;
   }
 
-  addDolly(delta: number) {
-    this.distanceTarget = clamp(this.distanceTarget + delta * 0.01, 8, 30);
-    this.idleTimer = 0;
-  }
-
   setFocus(x: number, y: number, distance: number) {
     this.panXTarget = x;
     this.panYTarget = y;

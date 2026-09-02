@@ -13,6 +13,11 @@ app.whenReady().then(() => {
       preload: join(__dirname, 'preload.js'),
       contextIsolation: true,
       nodeIntegration: false,
+      // This is a surveillance app: recordings must keep advancing while
+      // the window is minimized or behind another one, so the renderer
+      // (and the <video> elements decoding every open camera) can't be
+      // throttled just because it isn't currently visible.
+      backgroundThrottling: false,
     },
   });
   win.loadFile(join(__dirname, 'renderer', 'index.html'));

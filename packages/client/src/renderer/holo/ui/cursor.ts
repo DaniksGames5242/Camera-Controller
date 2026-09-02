@@ -124,6 +124,16 @@ export class HoloCursor {
     // Magnetism: pull the reticle toward the centre of whatever it is over,
     // proportionally to how strongly that thing wants to be hit. Small
     // controls become much easier to land on without changing their size.
+    //
+    // A magnet target can leave the DOM without ever firing pointerleave —
+    // a tile closing while the cursor sits over its button, say — and a
+    // detached element's getBoundingClientRect() is all zeros, which pulled
+    // the reticle toward the top-left corner and left it looking stuck
+    // there relative to the real pointer until the next hover event. Drop
+    // the magnet the instant its element is no longer attached.
+    if (this.target && !document.body.contains(this.target.el)) {
+      this.setTarget(null);
+    }
     if (this.target) {
       const rect = this.target.el.getBoundingClientRect();
       const cx = rect.left + rect.width / 2;

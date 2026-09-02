@@ -174,16 +174,12 @@ void main() {
   float scan = 0.5 + 0.5 * sin(uv.y * 460.0 - uTime * 9.0);
   float scanMask = mix(1.0, 0.82 + 0.18 * scan, 0.75);
 
-  // Roll bar: a brighter band drifting down the plate.
-  float roll = exp(-pow(fract(uv.y + uTime * 0.13) - 0.5, 2.0) * 40.0);
-
   vec3 col = base * scanMask;
   // Push hard toward the channel's own hue: a hologram is monochromatic
   // light, and a feed that keeps its natural colour reads as a TV set into
   // the wall rather than a projection standing in the room.
   col = mix(col, col * uTint * 1.30, 0.78) + uTint * lum * 0.20;
   col += fringe;
-  col += uTint * roll * 0.075;
 
   // Fresnel rim: the slab glows where it is seen edge-on.
   float fresnel = pow(1.0 - clamp(abs(vTangentView.z), 0.0, 1.0), 2.5);

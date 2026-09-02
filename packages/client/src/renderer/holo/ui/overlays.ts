@@ -264,6 +264,8 @@ export interface RadialItem {
  * more legible than a list that drops below.
  */
 export class RadialMenu {
+  private static readonly RADIUS_PX = 132;
+
   private readonly root: HTMLElement;
   private items: RadialItem[] = [];
   private readonly reveal = new Spring(0, 210, 20);
@@ -285,17 +287,25 @@ export class RadialMenu {
       const v = this.reveal.update(dt);
       if (v < 0.002 && !this.open) { this.root.hidden = true; return; }
       const count = this.buttons.length;
-      this.buttons.forEach((btn, i) => {
-        // Fan the items over an arc rather than a full circle: a partial
-        // fan never collides with a screen edge and keeps labels readable.
-        const spread = Math.min(Math.PI * 1.35, 0.55 * count);
-        const angle = -Math.PI / 2 - spread / 2 + (spread * (i + 0.5)) / count;
-        const radius = 92 * v;
-        const x = Math.cos(angle) * radius;
-        const y = Math.sin(angle) * radius;
-        btn.style.transform = `translate(-50%, -50%) translate(${x}px, ${y}px) scale(${clamp(v, 0, 1)})`;
-        btn.style.opacity = String(clamp(v * 1.4 - i * 0.05, 0, 1));
-      });
+      if (count > 0) {
+        // Solve the angular step from the geometry, not a guess: each item
+        // is a ~78px box, and the previous fixed radius/spread combination
+        // let adjacent boxes overlap at 3-4 items (their arc chord was
+        // narrower than the box itself). minDelta is the angle at which two
+        // boxes exactly touch at RADIUS_PX; spacing every item by at least
+        // that guarantees no overlap regardless of count.
+        const footprint = 96; // item width + a visible gap, in px
+        const minDelta = 2 * Math.asin(Math.min(1, footprint / (2 * RadialMenu.RADIUS_PX)));
+        const spread = Math.min(Math.PI * 1.7, minDelta * count);
+        this.buttons.forEach((btn, i) => {
+          const angle = -Math.PI / 2 - spread / 2 + (spread * (i + 0.5)) / count;
+          const radius = RadialMenu.RADIUS_PX * v;
+          const x = Math.cos(angle) * radius;
+          const y = Math.sin(angle) * radius;
+          btn.style.transform = `translate(-50%, -50%) translate(${x}px, ${y}px) scale(${clamp(v, 0, 1)})`;
+          btn.style.opacity = String(clamp(v * 1.4 - i * 0.05, 0, 1));
+        });
+      }
       this.root.style.setProperty('--reveal', v.toFixed(3));
     });
   }
@@ -333,5 +343,94 @@ export class RadialMenu {
     if (!this.open) return;
     this.open = false;
     this.reveal.to(0);
+  }
+}
+
+// ---------------------------------------------------------------- confirm
+
+/**
+ * A destructive action, asked about in the app's own voice instead of a
+ * bare OS `confirm()` — which is a plain system dialog that breaks the
+ * hologram illusion outright the moment it appears.
+ */
+export class HoloConfirm {
+  private readonly root: HTMLElement;
+  private readonly panel: HTMLElement;
+  private readonly titleEl: HTMLElement;
+  private readonly bodyEl: HTMLElement;
+  private readonly confirmBtn: HTMLButtonElement;
+  private readonly cancelBtn: HTMLButtonElement;
+  private readonly reveal = new Spring(0, 190, 20);
+  private resolve: ((ok: boolean) => void) | null = null;
+  private open = false;
+
+  constructor() {
+    this.root = document.createElement('div');
+    this.root.className = 'confirm-scrim';
+    this.root.hidden = true;
+
+    this.panel = document.createElement('div');
+    this.panel.className = 'confirm-panel danger';
+    for (const corner of ['tl', 'tr', 'bl', 'br']) {
+      const c = document.createElement('i');
+      c.className = `corner ${corner}`;
+      this.panel.appendChild(c);
+    }
+
+    this.titleEl = document.createElement('h3');
+    this.titleEl.className = 'confirm-title';
+    this.bodyEl = document.createElement('p');
+    this.bodyEl.className = 'confirm-body';
+
+    const actions = document.createElement('div');
+    actions.className = 'confirm-actions';
+    this.cancelBtn = document.createElement('button');
+    this.cancelBtn.type = 'button';
+    this.cancelBtn.className = 'confirm-btn ghost';
+    this.cancelBtn.textContent = 'ОТМЕНА';
+    this.confirmBtn = document.createElement('button');
+    this.confirmBtn.type = 'button';
+    this.confirmBtn.className = 'confirm-btn go';
+    actions.append(this.cancelBtn, this.confirmBtn);
+
+    this.panel.append(this.titleEl, this.bodyEl, actions);
+    this.root.appendChild(this.panel);
+    document.body.appendChild(this.root);
+
+    this.cancelBtn.onclick = () => this.finish(false);
+    this.confirmBtn.onclick = () => this.finish(true);
+    this.root.addEventListener('pointerdown', (e) => { if (e.target === this.root) this.finish(false); });
+    window.addEventListener('keydown', (e) => {
+      if (!this.open) return;
+      if (e.key === 'Escape') { this.finish(false); e.preventDefault(); }
+      if (e.key === 'Enter') { this.finish(true); e.preventDefault(); }
+    });
+
+    ticker.add((dt) => {
+      const v = this.reveal.update(dt);
+      if (v < 0.001 && !this.open) { this.root.hidden = true; return; }
+      this.root.style.setProperty('--reveal', v.toFixed(4));
+    });
+  }
+
+  /** Resolves true if confirmed, false if cancelled or dismissed. */
+  ask(title: string, body: string, confirmLabel: string): Promise<boolean> {
+    this.titleEl.textContent = title;
+    this.bodyEl.textContent = body;
+    this.confirmBtn.textContent = confirmLabel;
+    this.root.hidden = false;
+    this.open = true;
+    this.reveal.set(0);
+    this.reveal.to(1);
+    return new Promise((resolve) => { this.resolve = resolve; });
+  }
+
+  private finish(ok: boolean) {
+    if (!this.open) return;
+    this.open = false;
+    this.reveal.to(0);
+    const r = this.resolve;
+    this.resolve = null;
+    r?.(ok);
   }
 }

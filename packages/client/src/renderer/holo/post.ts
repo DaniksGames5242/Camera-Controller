@@ -139,9 +139,6 @@ void main() {
   float scanline = 0.5 + 0.5 * sin(uv.y * uResolution.y * 1.7 - uTime * 3.0);
   col *= mix(1.0, 0.88 + 0.12 * scanline, 0.35);
 
-  float sweep = fract(uv.y * 0.5 - uTime * 0.07);
-  col += vec3(0.05, 0.14, 0.18) * exp(-sweep * 12.0) * (0.4 + uEnergy);
-
   // --- pointer light bloom -------------------------------------------------
   vec2 pd = (uv - (uPointer * 0.5 + 0.5)) * vec2(uResolution.x / uResolution.y, 1.0);
   col += mix(HOLO_CYAN, HOLO_MINT, 0.4) * exp(-dot(pd, pd) * 190.0) * 0.16;

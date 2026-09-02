@@ -21,7 +21,7 @@ import type { Panel } from './holo/panels.js';
 import { projectPanel } from './holo/project.js';
 import { BootSequence } from './holo/ui/boot.js';
 import { HoloCursor } from './holo/ui/cursor.js';
-import { CommandPalette, RadialMenu, ToastStack, type Command } from './holo/ui/overlays.js';
+import { CommandPalette, HoloConfirm, RadialMenu, ToastStack, type Command } from './holo/ui/overlays.js';
 import { Damper, ScrambleText, Spring, ticker } from './holo/ui/motion.js';
 import { clamp, lerp } from './holo/math.js';
 
@@ -64,6 +64,7 @@ const cursor = reduceMotion ? null : new HoloCursor(document.body);
 const palette = new CommandPalette();
 const toasts = new ToastStack();
 const radial = new RadialMenu();
+const confirmDialog = new HoloConfirm();
 
 /** The virtual pixel grid every slab's chrome is authored in. */
 const SLAB_W = 960;
@@ -165,10 +166,7 @@ function buildSlabChrome(deviceName: string): SlabChrome {
   const closeBtn = mk('close', 'ЗАКРЫТЬ', 'Закрыть канал (Esc)');
   actions.append(recBtn, micBtn, focusBtn, closeBtn);
 
-  const scan = document.createElement('i');
-  scan.className = 'slab-scan';
-
-  root.append(scan, top, meta, actions);
+  root.append(top, meta, actions);
   slabLayer.appendChild(root);
 
   const name = new ScrambleText(nameEl, 1.6);
@@ -478,6 +476,14 @@ function wireChrome(session: Session) {
   chrome.root.addEventListener('pointerleave', () => {
     session.panel.tFocus = session.deviceId === focusedId ? 1 : 0;
   });
+  // Clicking anywhere on a tile — not just its small "ФОКУС" button — brings
+  // it into focus. That matters most for the docked ribbon of other open
+  // channels along the bottom of focus mode, which are too small to land a
+  // click on any one button reliably.
+  chrome.root.addEventListener('click', (e) => {
+    if ((e.target as HTMLElement).closest('.slab-btn')) return;
+    focusSession(deviceId);
+  });
 }
 
 function focusSession(deviceId: string) {
@@ -489,8 +495,73 @@ function focusSession(deviceId: string) {
     focusedId = deviceId;
     layoutMode = 'focus';
   }
+  wheelDistant = false;
+  stage.camera.setFocus(0, 0, 16);
   stage.interaction.kickGlitch(0.35);
   relayout();
+  renderList();
+}
+
+/**
+ * The wheel's own notion of "how zoomed in": 0 = normal overview, 1 = the
+ * same layout pulled back further so every channel is comfortably visible
+ * at once, 2..N+1 = that channel focused. Derived fresh from the existing
+ * focusedId/layoutMode state each call rather than stored separately, so it
+ * can never drift out of sync with a focus change made by a click or a
+ * number key — except the normal/distant distinction, which needs the one
+ * extra bit since both present as "not focused".
+ */
+let wheelDistant = false;
+
+/** Snaps yaw/pitch back to dead centre and distance to normal, keeping the
+ * wheel's own step tracking in sync with it. */
+function recallCamera() {
+  wheelDistant = false;
+  stage.camera.setFocus(0, 0, 16);
+  stage.camera.addOrbit(-1e6, -1e6);
+  stage.camera.addOrbit(1e6, 1e6);
+}
+
+function stepView(dir: number) {
+  const sessionList = [...sessions.values()];
+  const totalSteps = 2 + sessionList.length;
+
+  let step: number;
+  if (layoutMode === 'focus' && focusedId) {
+    const idx = sessionList.findIndex((s) => s.deviceId === focusedId);
+    step = idx >= 0 ? idx + 2 : 0;
+  } else {
+    step = wheelDistant ? 1 : 0;
+  }
+  const wasFocus = step >= 2;
+  step = ((step + dir) % totalSteps + totalSteps) % totalSteps;
+  const isFocus = step >= 2;
+
+  if (!isFocus) {
+    wheelDistant = step === 1;
+    if (wasFocus) {
+      // Leaving focus: the panels need laying back out into the overview
+      // arrangement before the camera pulls back to look at them.
+      layoutMode = 'arc';
+      focusedId = null;
+      relayout();
+    }
+    // Distance-only otherwise. The existing overview layout already fits
+    // the normal frustum; recomputing it here would resize every panel to
+    // fill the new, bigger frustum and cancel the zoomed-out look — pulling
+    // the camera back while leaving the same arrangement in place is what
+    // actually makes it read as smaller, with room around it.
+    stage.camera.setFocus(0, 0, step === 1 ? 26 : 16);
+  } else {
+    wheelDistant = false;
+    const target = sessionList[step - 2];
+    if (!target) return;
+    focusedId = target.deviceId;
+    layoutMode = 'focus';
+    stage.camera.setFocus(0, 0, 16);
+    relayout();
+  }
+  stage.interaction.kickGlitch(0.2);
   renderList();
 }
 
@@ -690,8 +761,8 @@ function buildDeviceRow(device: DeviceWithId): DeviceRow {
     const rect = root.getBoundingClientRect();
     // Tilt the card toward the pointer — the card behaves like a physical
     // plate under a light, not like a rectangle with a hover colour.
-    row.tiltY.to(((e.clientX - rect.left) / rect.width - 0.5) * 14);
-    row.tiltX.to(-((e.clientY - rect.top) / rect.height - 0.5) * 12);
+    row.tiltY.to(((e.clientX - rect.left) / rect.width - 0.5) * 6);
+    row.tiltX.to(-((e.clientY - rect.top) / rect.height - 0.5) * 5);
   });
   root.addEventListener('pointerenter', () => {
     row.lift.to(1);
@@ -774,12 +845,13 @@ function openNodeMenu(x: number, y: number, deviceId: string) {
   ]);
 }
 
-function confirmForget(device: DeviceWithId) {
+async function confirmForget(device: DeviceWithId) {
   const message =
     device.status === 'online'
-      ? `Удалить «${device.name}»? Агент на этом устройстве остановится и не будет виден, пока его не запустят заново.`
-      : `Удалить «${device.name}» из списка? Если узел снова выйдет в сеть, он появится заново.`;
-  if (!confirm(message)) return;
+      ? `Агент на этом устройстве остановится и не будет виден, пока его не запустят заново.`
+      : `Если узел снова выйдет в сеть, он появится заново.`;
+  const ok = await confirmDialog.ask(`Забыть «${device.name}»?`, message, 'ЗАБЫТЬ');
+  if (!ok) return;
   if (sessions.has(device.id)) closeSession(device.id);
   forgetDevice(device.id);
   stage.interaction.kickGlitch(0.8);
@@ -1013,7 +1085,11 @@ stage.onFrame((dt, time) => {
     // its own small type has nothing competing with it.
     const recessed = settingsConsole ? 0.18 : 1;
     root.style.opacity = String(clamp(session.panel.materialize * legibility * 1.4 * recessed, 0, 1));
-    root.style.pointerEvents = legibility > 0.35 && !settingsConsole ? 'auto' : 'none';
+    // Interactive whenever there's no console blocking it — even a tiny
+    // docked thumbnail must stay clickable so the whole tile can be tapped
+    // to bring it into focus; the per-button labels are what actually fades
+    // out below the legibility threshold (via CSS opacity), not the hit area.
+    root.style.pointerEvents = settingsConsole ? 'none' : 'auto';
 
     if (session.recorder) {
       session.chrome.clock.textContent = formatClock(performance.now() - session.recordingStartedAt);
@@ -1038,8 +1114,11 @@ stage.onFrame((dt, time) => {
     const lift = row.lift.update(dt);
     const tiltX = row.tiltX.update(dt);
     const tiltY = row.tiltY.update(dt);
+    // Kept modest on purpose: this card lives inside a clipped, fixed-width
+    // rail, and the lift/tilt used to be strong enough that a full hover
+    // pushed the card past the rail's right edge and got visibly cropped.
     row.root.style.transform =
-      `perspective(760px) translate3d(${lift * 8}px, ${-lift * 2}px, ${lift * 26}px) ` +
+      `perspective(900px) translate3d(${lift * 3}px, ${-lift * 1.5}px, ${lift * 12}px) ` +
       `rotateX(${tiltX}deg) rotateY(${tiltY}deg)`;
     row.root.style.setProperty('--lift', lift.toFixed(3));
 
@@ -1073,21 +1152,30 @@ function bindStageInput() {
     const { x, y } = toNdc(e);
     stage.interaction.setPointer(x, y);
     if (dragging) {
-      stage.camera.addOrbit(e.clientX - lastDragX, e.clientY - lastDragY);
+      // A deadzone before the drag actually orbits the camera: an ordinary
+      // click reports a pixel or two of movement from OS/mouse jitter alone,
+      // and without this every click on empty space nudged the view.
+      const totalDist = Math.hypot(e.clientX - dragStartX, e.clientY - dragStartY);
+      if (totalDist > DRAG_THRESHOLD) {
+        stage.camera.addOrbit(e.clientX - lastDragX, e.clientY - lastDragY);
+      }
       lastDragX = e.clientX;
       lastDragY = e.clientY;
     }
   }, { passive: true });
 
+  const DRAG_THRESHOLD = 4;
   let dragging = false;
+  let dragStartX = 0;
+  let dragStartY = 0;
   let lastDragX = 0;
   let lastDragY = 0;
 
   canvas.addEventListener('pointerdown', (e) => {
     if (e.button !== 0) return;
     dragging = true;
-    lastDragX = e.clientX;
-    lastDragY = e.clientY;
+    dragStartX = lastDragX = e.clientX;
+    dragStartY = lastDragY = e.clientY;
     stage.interaction.pressed = true;
     const world = stage.pointerWorld(0);
     stage.interaction.ripple(world[0], world[2], 1);
@@ -1100,9 +1188,14 @@ function bindStageInput() {
     stage.interaction.pressed = false;
   });
 
+  // The wheel steps through view modes rather than dollying the camera:
+  // normal overview → pulled-back overview (everything visible at once) →
+  // each open channel in turn, one at a time. Free zoom on a hologram with
+  // no real depth cues to judge distance by mostly just gets people lost.
   canvas.addEventListener('wheel', (e) => {
     e.preventDefault();
-    stage.camera.addDolly(e.deltaY);
+    const dir = Math.sign(e.deltaY);
+    if (dir !== 0) stepView(dir);
   }, { passive: false });
 
   canvas.addEventListener('contextmenu', (e) => e.preventDefault());
@@ -1200,7 +1293,7 @@ function refreshCommands() {
       id: 'recall',
       group: 'ВИД',
       title: 'Вернуть камеру в исходное положение',
-      run: () => { stage.camera.setFocus(0, 0, 16); stage.camera.addOrbit(-1e6, -1e6); stage.camera.addOrbit(1e6, 1e6); },
+      run: () => recallCamera(),
     },
     {
       id: 'closeall',
@@ -1222,18 +1315,14 @@ function wireDock() {
   const layout = document.getElementById('dock-layout') as HTMLButtonElement;
   const recall = document.getElementById('dock-recall') as HTMLButtonElement;
   const paletteBtn = document.getElementById('btn-palette') as HTMLButtonElement;
+  const meter = document.getElementById('dock-meter') as HTMLElement;
 
   scan.onclick = () => { stage.interaction.triggerScan(); stage.interaction.kickGlitch(0.35); };
   layout.onclick = cycleLayout;
-  recall.onclick = () => {
-    stage.camera.setFocus(0, 0, 16);
-    stage.camera.addOrbit(-1e6, -1e6);
-    stage.camera.addOrbit(1e6, 1e6);
-    toasts.push('Камера возвращена', 'info', 1800);
-  };
+  recall.onclick = () => { recallCamera(); toasts.push('Камера возвращена', 'info', 1800); };
   paletteBtn.onclick = () => palette.toggle();
 
-  for (const el of [scan, layout, recall, paletteBtn]) {
+  for (const el of [scan, layout, recall, paletteBtn, meter]) {
     registerMagnet(el, 0.38, el.dataset.hint);
   }
 }
