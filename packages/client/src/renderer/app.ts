@@ -38,6 +38,10 @@ const settingsFps = document.getElementById('settings-fps') as HTMLInputElement;
 const settingsCancel = document.getElementById('settings-cancel') as HTMLButtonElement;
 const settingsSave = document.getElementById('settings-save') as HTMLButtonElement;
 
+const hudStatus = document.getElementById('hud-status') as HTMLElement;
+const bootOverlay = document.getElementById('boot-overlay') as HTMLElement;
+const bootText = document.getElementById('boot-text') as HTMLElement;
+
 let devices: DeviceWithId[] = [];
 let settingsTargetDeviceId: string | null = null;
 
@@ -73,7 +77,14 @@ function updateGridColumns() {
   placeholderEl.hidden = n > 0;
 }
 
+function updateHud() {
+  const online = devices.filter((d) => d.status === 'online').length;
+  hudStatus.textContent =
+    `узлов: ${devices.length} · в сети: ${online} · каналов: ${sessions.size}`;
+}
+
 function renderList() {
+  updateHud();
   listEl.innerHTML = '';
   for (const d of devices) {
     const row = document.createElement('div');
@@ -170,11 +181,13 @@ function toggleRecording(session: Session) {
   if (session.recorder) {
     session.recordingWanted = false;
     stopRecording(session);
-    session.recordBtn.textContent = 'Включить запись';
+    session.recordBtn.textContent = '● ЗАПИСЬ';
+    session.recordBtn.classList.remove('active-rec');
   } else if (session.stream) {
     session.recordingWanted = true;
     startRecording(session, session.stream);
-    session.recordBtn.textContent = 'Остановить запись';
+    session.recordBtn.textContent = '■ ЗАПИСЬ';
+    session.recordBtn.classList.add('active-rec');
   }
 }
 
@@ -195,11 +208,13 @@ async function toggleMic(session: Session) {
     }
     session.micTrack = micStream.getAudioTracks()[0];
     await session.audioSender.replaceTrack(session.micTrack);
-    session.micBtn.textContent = '🎤 Выключить микрофон';
+    session.micBtn.textContent = '🎤 МИК ВКЛ';
+    session.micBtn.classList.add('active-mic');
     return;
   }
   session.micTrack.enabled = !session.micTrack.enabled;
-  session.micBtn.textContent = session.micTrack.enabled ? '🎤 Выключить микрофон' : '🎤 Включить микрофон';
+  session.micBtn.textContent = session.micTrack.enabled ? '🎤 МИК ВКЛ' : '🎤 МИКРОФОН';
+  session.micBtn.classList.toggle('active-mic', session.micTrack.enabled);
 }
 
 // ---------- viewing sessions ----------
@@ -238,16 +253,18 @@ async function openViewer(deviceId: string, deviceName: string) {
   const actions = document.createElement('div');
   actions.className = 'tile-actions';
   const recordBtn = document.createElement('button');
-  recordBtn.className = 'tile-btn';
-  recordBtn.textContent = 'Остановить запись';
+  recordBtn.className = 'tile-btn active-rec';
+  recordBtn.textContent = '■ ЗАПИСЬ';
+  recordBtn.title = 'Остановить запись этого канала';
   recordBtn.onclick = () => toggleRecording(session);
   const micBtn = document.createElement('button');
   micBtn.className = 'tile-btn';
-  micBtn.textContent = '🎤 Включить микрофон';
+  micBtn.textContent = '🎤 МИКРОФОН';
+  micBtn.title = 'Передавать звук с микрофона на это устройство';
   micBtn.onclick = () => toggleMic(session);
   const closeBtn = document.createElement('button');
   closeBtn.className = 'tile-btn';
-  closeBtn.textContent = 'Закрыть';
+  closeBtn.textContent = '✕ ЗАКРЫТЬ';
   closeBtn.onclick = () => closeSession(deviceId);
   actions.append(recordBtn, micBtn, closeBtn);
   tile.append(video, label, actions);
@@ -372,7 +389,39 @@ settingsModal.onclick = (e) => {
   if (e.target === settingsModal) closeSettingsModal();
 };
 
+// ---------- boot sequence ----------
+// Purely cosmetic: types out a few lines while signaling connects in
+// parallel, then lifts. Never gates usability — it dismisses on its own
+// timer whether or not the connection finished, and is skipped entirely
+// when the OS asks for reduced motion.
+
+const BOOT_LINES = [
+  '> mycams//ctrl v0.1',
+  '> установка защищённого канала…',
+  '> сигналинг: firebase rtdb  [OK]',
+  '> транспорт: webrtc / stun+turn  [OK]',
+  '> сканирование узлов…',
+];
+
+async function runBootSequence() {
+  if (window.matchMedia('(prefers-reduced-motion: reduce)').matches) {
+    bootOverlay.classList.add('done');
+    return;
+  }
+  for (const line of BOOT_LINES) {
+    for (const ch of line) {
+      bootText.textContent += ch;
+      await new Promise((r) => setTimeout(r, 9));
+    }
+    bootText.textContent += '\n';
+    await new Promise((r) => setTimeout(r, 90));
+  }
+  await new Promise((r) => setTimeout(r, 260));
+  bootOverlay.classList.add('done');
+}
+
 async function main() {
+  runBootSequence(); // deliberately not awaited — the app connects behind it
   await initSignaling();
   listenDevices((list) => {
     devices = list.sort((a, b) => a.name.localeCompare(b.name));
@@ -380,4 +429,7 @@ async function main() {
   });
 }
 
-main().catch((err) => console.error('client failed to start', err));
+main().catch((err) => {
+  console.error('client failed to start', err);
+  bootOverlay.classList.add('done');
+});

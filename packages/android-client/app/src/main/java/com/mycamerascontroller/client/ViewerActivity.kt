@@ -47,7 +47,9 @@ class ViewerActivity : AppCompatActivity() {
         setContentView(R.layout.activity_viewer)
 
         deviceId = intent.getStringExtra(EXTRA_DEVICE_ID) ?: run { finish(); return }
-        title = intent.getStringExtra(EXTRA_DEVICE_NAME)
+        val deviceName = intent.getStringExtra(EXTRA_DEVICE_NAME)
+        title = deviceName
+        findViewById<android.widget.TextView>(R.id.channelLabel).text = deviceName
 
         eglBase = EglBase.create()
         remoteView = findViewById(R.id.remoteView)

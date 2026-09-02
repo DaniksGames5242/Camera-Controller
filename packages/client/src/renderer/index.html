@@ -6,25 +6,50 @@
     <link rel="stylesheet" href="style.css" />
   </head>
   <body>
+    <!-- Ambient holographic backdrop layers (purely decorative) -->
+    <div class="fx-grid" aria-hidden="true"></div>
+    <div class="fx-glow" aria-hidden="true"></div>
+    <div class="fx-scanlines" aria-hidden="true"></div>
+    <div class="fx-vignette" aria-hidden="true"></div>
+
     <div id="app">
-      <aside id="device-list"></aside>
+      <aside id="sidebar">
+        <header id="brand-block">
+          <div class="brand" data-text="MYCAMS//CTRL">MYCAMS<span class="brand-accent">//</span>CTRL</div>
+          <div class="hud-readout"><span id="hud-status">ИНИЦИАЛИЗАЦИЯ…</span></div>
+          <div class="hud-bar"><span class="hud-bar-fill"></span></div>
+        </header>
+        <div id="device-list"></div>
+      </aside>
+
       <main id="viewer-grid">
-        <p id="viewer-placeholder">Выберите устройство слева, чтобы начать просмотр — можно открыть сразу несколько.</p>
+        <p id="viewer-placeholder">
+          <span class="ph-title">НЕТ АКТИВНЫХ КАНАЛОВ</span>
+          <span class="ph-sub">выберите устройство слева — можно открыть сразу несколько</span>
+        </p>
       </main>
     </div>
 
     <div id="settings-modal" class="modal-overlay" hidden>
       <div class="modal">
+        <div class="modal-corner tl"></div>
+        <div class="modal-corner tr"></div>
+        <div class="modal-corner bl"></div>
+        <div class="modal-corner br"></div>
         <h3 id="settings-title">Настройки камеры</h3>
-        <label>Ширина (px)<input id="settings-width" type="number" min="0" placeholder="по умолчанию 1280" /></label>
-        <label>Высота (px)<input id="settings-height" type="number" min="0" placeholder="по умолчанию 720" /></label>
-        <label>Частота кадров (fps)<input id="settings-fps" type="number" min="0" placeholder="по умолчанию 30" /></label>
-        <p class="modal-hint">Применяется в момент, когда агент начинает новую трансляцию — на уже открытый просмотр не повлияет.</p>
+        <label>ШИРИНА (px)<input id="settings-width" type="number" min="0" placeholder="по умолчанию 1280" /></label>
+        <label>ВЫСОТА (px)<input id="settings-height" type="number" min="0" placeholder="по умолчанию 720" /></label>
+        <label>ЧАСТОТА КАДРОВ (fps)<input id="settings-fps" type="number" min="0" placeholder="по умолчанию 30" /></label>
+        <p class="modal-hint">Применяется, когда агент начинает новую трансляцию — на уже открытый просмотр не повлияет.</p>
         <div class="modal-actions">
           <button id="settings-cancel">Отмена</button>
           <button id="settings-save">Сохранить</button>
         </div>
       </div>
+    </div>
+
+    <div id="boot-overlay" aria-hidden="true">
+      <pre id="boot-text"></pre>
     </div>
 
     <script src="app.js"></script>

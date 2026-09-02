@@ -1,3 +1,19 @@
-<shape xmlns:android="http://schemas.android.com/apk/res/android" android:shape="oval">
-    <solid android:color="#3ECF6A" />
-</shape>
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Live indicator: solid core inside a soft halo (XML drawables can't do a
+     real blur, so the halo is a translucent ring). -->
+<layer-list xmlns:android="http://schemas.android.com/apk/res/android">
+    <item>
+        <shape android:shape="oval">
+            <solid android:color="#3348FFB0" />
+        </shape>
+    </item>
+    <item
+        android:top="3dp"
+        android:bottom="3dp"
+        android:left="3dp"
+        android:right="3dp">
+        <shape android:shape="oval">
+            <solid android:color="@color/green" />
+        </shape>
+    </item>
+</layer-list>

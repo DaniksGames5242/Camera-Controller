@@ -47,10 +47,15 @@ class MainActivity : AppCompatActivity() {
         )
         list.adapter = adapter
 
+        val hudStatus = findViewById<TextView>(R.id.hudStatus)
+        hudStatus.text = getString(R.string.hud_initializing)
+
         Signaling.init {
             devicesListener = Signaling.listenDevices { devices ->
                 adapter.submit(devices)
                 emptyText.visibility = if (devices.isEmpty()) android.view.View.VISIBLE else android.view.View.GONE
+                val online = devices.count { it.record.status == "online" }
+                hudStatus.text = getString(R.string.hud_status, devices.size, online)
             }
         }
     }

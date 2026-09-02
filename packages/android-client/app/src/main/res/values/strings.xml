@@ -10,6 +10,8 @@
     <string name="enable_mic">🎤 Включить микрофон</string>
     <string name="disable_mic">🎤 Выключить микрофон</string>
     <string name="camera_settings">Настройки камеры</string>
+    <string name="hud_initializing">инициализация…</string>
+    <string name="hud_status">узлов: %1$d · в сети: %2$d</string>
     <string name="settings_hint">Применяется агентом при следующем новом подключении — на уже открытый просмотр не повлияет.</string>
     <string name="save">Сохранить</string>
     <string name="cancel">Отмена</string>
