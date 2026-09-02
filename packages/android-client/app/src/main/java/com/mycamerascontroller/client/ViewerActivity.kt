@@ -115,7 +115,8 @@ class ViewerActivity : AppCompatActivity() {
         }
 
         pc.createOffer(object : SimpleSdpObserver() {
-            override fun onCreateSuccess(desc: SessionDescription) {
+            override fun onCreateSuccess(p0: SessionDescription?) {
+                val desc = p0 ?: return
                 pc.setLocalDescription(SimpleSdpObserver(), desc)
                 Signaling.sendOffer(deviceId, id, SdpPayload(desc.type.canonicalForm(), desc.description))
             }

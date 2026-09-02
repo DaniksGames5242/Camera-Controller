@@ -150,7 +150,8 @@ class CameraAgentService : Service() {
         val remoteDesc = SessionDescription(SessionDescription.Type.OFFER, offer.sdp)
         pc.setRemoteDescription(SimpleSdpObserver(), remoteDesc)
         pc.createAnswer(object : SimpleSdpObserver() {
-            override fun onCreateSuccess(desc: SessionDescription) {
+            override fun onCreateSuccess(p0: SessionDescription?) {
+                val desc = p0 ?: return
                 pc.setLocalDescription(SimpleSdpObserver(), desc)
                 Signaling.sendAnswer(deviceId, callId, SdpPayload(desc.type.canonicalForm(), desc.description))
             }
