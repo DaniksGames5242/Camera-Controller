@@ -7,12 +7,23 @@ import android.os.Build
 import android.os.Bundle
 import android.os.PowerManager
 import android.provider.Settings
-import android.widget.Button
-import android.widget.TextView
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.appcompat.app.AppCompatActivity
 import androidx.core.content.ContextCompat
+import androidx.core.view.WindowCompat
+import com.mycamerascontroller.agent.holo.AgentButtonView
+import com.mycamerascontroller.agent.holo.AgentStageView
+import com.mycamerascontroller.agent.holo.DecodeTextView
+import com.mycamerascontroller.agent.holo.HoloBracketView
 
+/**
+ * The one screen this app shows a person: two permissions, granted once,
+ * after which the agent lives entirely in a foreground service and this
+ * activity is never opened again. It is still built out of the same
+ * holographic language as both client apps — the room, the bracket frame,
+ * the decode-in status text — because "seen once" is not "seen by no one",
+ * and the very first impression of the whole system is exactly this screen.
+ */
 class MainActivity : AppCompatActivity() {
 
     // Camera/mic are the only permissions the agent actually can't work
@@ -40,15 +51,33 @@ class MainActivity : AppCompatActivity() {
         refreshStatus()
     }
 
+    private lateinit var stage: AgentStageView
+    private lateinit var statusFrame: HoloBracketView
+    private lateinit var statusText: DecodeTextView
+    private lateinit var grantButton: AgentButtonView
+    private lateinit var batteryButton: AgentButtonView
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        WindowCompat.setDecorFitsSystemWindows(window, false)
         setContentView(R.layout.activity_main)
 
-        findViewById<Button>(R.id.grantPermissionsButton).setOnClickListener {
-            permissionLauncher.launch(requestedPermissions)
+        stage = findViewById(R.id.stage)
+        statusFrame = findViewById(R.id.statusFrame)
+        statusText = findViewById(R.id.statusText)
+
+        findViewById<DecodeTextView>(R.id.brandMark).apply {
+            setImmediate("")
+            setDecoded(getString(R.string.brand_mark))
         }
-        findViewById<Button>(R.id.batteryOptButton).setOnClickListener {
-            requestIgnoreBatteryOptimizations()
+
+        grantButton = findViewById<AgentButtonView>(R.id.grantPermissionsButton).apply {
+            label = getString(R.string.grant_permissions)
+            onActivate = { permissionLauncher.launch(requestedPermissions) }
+        }
+        batteryButton = findViewById<AgentButtonView>(R.id.batteryOptButton).apply {
+            label = getString(R.string.ignore_battery_optimizations)
+            onActivate = { requestIgnoreBatteryOptimizations() }
         }
 
         if (hasEssentialPermissions()) startAgentService()
@@ -74,12 +103,20 @@ class MainActivity : AppCompatActivity() {
             startActivity(Intent(Settings.ACTION_REQUEST_IGNORE_BATTERY_OPTIMIZATIONS).apply {
                 data = Uri.parse("package:$packageName")
             })
+        } else {
+            batteryButton.done = true
         }
     }
 
     private fun refreshStatus() {
-        val statusText = findViewById<TextView>(R.id.statusText)
-        statusText.text = if (hasEssentialPermissions()) getString(R.string.status_idle)
-        else getString(R.string.grant_permissions)
+        val ready = hasEssentialPermissions()
+        stage.armed = ready
+        statusFrame.armed = ready
+        statusText.setDecoded(
+            if (ready) getString(R.string.status_idle) else getString(R.string.status_waiting)
+        )
+        grantButton.done = ready
+        val pm = getSystemService(Context.POWER_SERVICE) as PowerManager
+        batteryButton.done = pm.isIgnoringBatteryOptimizations(packageName)
     }
 }

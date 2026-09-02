@@ -1,0 +1,11 @@
+<resources>
+    <color name="bg">#02040A</color>
+    <color name="cyan">#35E6FF</color>
+    <color name="mint">#48FFC0</color>
+    <color name="violet">#8B6BFF</color>
+    <color name="magenta">#FF3FA4</color>
+    <color name="amber">#FFB23F</color>
+    <color name="ink">#DCF5FF</color>
+    <color name="ink_dim">#7FA5B8</color>
+    <color name="ink_faint">#4D7F94</color>
+</resources>

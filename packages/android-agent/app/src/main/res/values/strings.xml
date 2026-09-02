@@ -1,9 +1,12 @@
 <resources>
     <string name="app_name">MyCamerasController Agent</string>
-    <string name="status_idle">Ожидание подключений</string>
+    <string name="brand_mark">MYCAMS//AGENT</string>
+    <string name="brand_sub">ГОЛОГРАФИЧЕСКИЙ УЗЕЛ НАБЛЮДЕНИЯ</string>
+    <string name="status_idle">УЗЕЛ ГОТОВ\nОжидание подключений</string>
+    <string name="status_waiting">ТРЕБУЮТСЯ РАЗРЕШЕНИЯ\nКамера и микрофон</string>
     <string name="status_streaming">Идёт просмотр — камера включена</string>
-    <string name="grant_permissions">Разрешить камеру и микрофон</string>
-    <string name="ignore_battery_optimizations">Отключить оптимизацию батареи для этого приложения</string>
+    <string name="grant_permissions">РАЗРЕШИТЬ КАМЕРУ И МИКРОФОН</string>
+    <string name="ignore_battery_optimizations">ОТКЛЮЧИТЬ ОПТИМИЗАЦИЮ БАТАРЕИ</string>
     <string name="notification_channel_name">Статус агента камеры</string>
     <string name="notification_title_idle">Камера в режиме ожидания</string>
     <string name="notification_title_streaming">Камера просматривается</string>

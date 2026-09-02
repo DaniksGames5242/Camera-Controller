@@ -1,3 +1,10 @@
 <resources>
-    <style name="Theme.MyCamerasControllerAgent" parent="Theme.MaterialComponents.DayNight.NoActionBar" />
+    <style name="Theme.MyCamerasControllerAgent" parent="Theme.MaterialComponents.NoActionBar">
+        <item name="android:windowBackground">@color/bg</item>
+        <item name="colorPrimary">@color/cyan</item>
+        <item name="colorAccent">@color/cyan</item>
+        <item name="android:statusBarColor">@android:color/transparent</item>
+        <item name="android:navigationBarColor">@android:color/transparent</item>
+        <item name="android:windowLightStatusBar">false</item>
+    </style>
 </resources>
