@@ -37,6 +37,8 @@ class CameraAgentService : Service() {
     private var surfaceTextureHelper: SurfaceTextureHelper? = null
 
     private var stopIncomingCallListener: (() -> Unit)? = null
+    private var deviceRemovedListener: com.google.firebase.database.ValueEventListener? = null
+    private var forgotten = false
 
     private val heartbeatHandler = Handler(Looper.getMainLooper())
     private val heartbeatIntervalMs = 20_000L
@@ -77,6 +79,13 @@ class CameraAgentService : Service() {
                 handleIncomingCall(callId, offer)
             }
             heartbeatHandler.postDelayed(heartbeatRunnable, heartbeatIntervalMs)
+            // Someone explicitly removed this device from a client while
+            // we're still running — actually stop, not just get resurrected
+            // by the next heartbeat.
+            deviceRemovedListener = Signaling.onDeviceRemoved(deviceId) {
+                forgotten = true
+                stopSelf()
+            }
         }
     }
 
@@ -106,7 +115,10 @@ class CameraAgentService : Service() {
     override fun onDestroy() {
         heartbeatHandler.removeCallbacks(heartbeatRunnable)
         stopIncomingCallListener?.invoke()
-        Signaling.setOffline(deviceId)
+        deviceRemovedListener?.let { Signaling.stopDeviceRemovedListener(deviceId, it) }
+        // If we're stopping because the device record was forgotten, don't
+        // write it straight back as "offline" — let it actually stay gone.
+        if (!forgotten) Signaling.setOffline(deviceId)
         endActiveCall()
         peerConnectionFactory?.dispose()
         eglBase.release()

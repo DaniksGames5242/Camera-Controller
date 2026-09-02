@@ -30,9 +30,14 @@ class MainActivity : AppCompatActivity() {
                 )
             },
             onLongClick = { device ->
+                val messageRes = if (device.record.status == "online") {
+                    R.string.forget_device_confirm_online
+                } else {
+                    R.string.forget_device_confirm
+                }
                 AlertDialog.Builder(this)
                     .setTitle(device.record.name)
-                    .setMessage(R.string.forget_device_confirm)
+                    .setMessage(messageRes)
                     .setPositiveButton(R.string.forget_device) { _, _ -> Signaling.forgetDevice(device.id) }
                     .setNegativeButton(android.R.string.cancel, null)
                     .show()

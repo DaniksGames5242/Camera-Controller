@@ -39,6 +39,12 @@ app.whenReady().then(() => {
     },
   });
   win.loadFile(join(__dirname, 'renderer', 'index.html'));
+
+  // Fired by the renderer when this device's Firebase record has been
+  // deleted from a client — i.e. someone explicitly removed this agent.
+  // Quitting is the actual "stop working" the removal implies; autostart
+  // (or a manual relaunch) re-registers it fresh next time it's run.
+  ipcMain.on('quit-app', () => app.quit());
 });
 
 app.on('window-all-closed', () => {

@@ -4,6 +4,7 @@ import {
   onIncomingCall,
   onRemoteIceCandidates,
   onCallEnded,
+  onDeviceRemoved,
   sendAnswer,
   sendIceCandidate,
   createPeerConnection,
@@ -15,6 +16,7 @@ declare global {
   interface Window {
     mcc: {
       getDeviceInfo: () => Promise<{ id: string; name: string; platform: 'windows' | 'linux' }>;
+      quitApp: () => void;
     };
   }
 }
@@ -81,6 +83,13 @@ async function main() {
   registerDevice(info.id, { name: info.name, platform: info.platform });
   onIncomingCall(info.id, (callId, offer) => {
     handleCall(info.id, callId, offer);
+  });
+  // Someone explicitly removed this device from a client while we're still
+  // running — quit outright (not registration.stop(), which would just
+  // write the record straight back as "offline") so it actually goes away
+  // instead of the next heartbeat resurrecting it.
+  onDeviceRemoved(info.id, () => {
+    window.mcc.quitApp();
   });
 }
 

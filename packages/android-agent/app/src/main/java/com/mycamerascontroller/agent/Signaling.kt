@@ -68,6 +68,34 @@ object Signaling {
     }
 
     /**
+     * Notifies when this device's own record has been forgotten out from
+     * under it (deleted by a client while still running, not just an
+     * ordinary disconnect). Only fires after the record has actually been
+     * observed to exist, so it can't misfire on the initial empty snapshot
+     * before registerDevice's write lands.
+     */
+    fun onDeviceRemoved(deviceId: String, cb: () -> Unit): ValueEventListener {
+        val ref = roomRef("devices/$deviceId")
+        var seenExisting = false
+        val listener = object : ValueEventListener {
+            override fun onDataChange(snapshot: DataSnapshot) {
+                if (snapshot.exists()) {
+                    seenExisting = true
+                } else if (seenExisting) {
+                    cb()
+                }
+            }
+            override fun onCancelled(error: DatabaseError) {}
+        }
+        ref.addValueEventListener(listener)
+        return listener
+    }
+
+    fun stopDeviceRemovedListener(deviceId: String, listener: ValueEventListener) {
+        roomRef("devices/$deviceId").removeEventListener(listener)
+    }
+
+    /**
      * Fires once per new incoming call for this device.
      * The call node is created before its offer is written (createCall vs.
      * sendAnswer/sendOffer are separate writes on the caller side), so this

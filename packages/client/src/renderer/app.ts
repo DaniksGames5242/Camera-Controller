@@ -41,22 +41,24 @@ function renderList() {
     row.innerHTML = `<span class="dot ${d.status}"></span><span class="device-name">${d.name}</span>`;
     if (d.status === 'online') {
       row.onclick = () => openViewer(d.id);
-    } else {
-      // Offline devices can be forgotten — e.g. a reinstalled agent leaves
-      // its old record behind forever otherwise (it never gets a new
-      // heartbeat, but nothing ever deletes it either).
-      const forgetBtn = document.createElement('button');
-      forgetBtn.className = 'forget-btn';
-      forgetBtn.textContent = '✕';
-      forgetBtn.title = 'Забыть устройство';
-      forgetBtn.onclick = (e) => {
-        e.stopPropagation();
-        if (confirm(`Удалить "${d.name}" из списка? Если оно снова выйдет в сеть, появится заново.`)) {
-          forgetDevice(d.id);
-        }
-      };
-      row.appendChild(forgetBtn);
     }
+
+    // Any device can be forgotten, online or not — a running agent detects
+    // this itself and shuts down (see onDeviceRemoved in the agent), an
+    // offline leftover (e.g. a reinstalled agent's old record) just goes away.
+    const forgetBtn = document.createElement('button');
+    forgetBtn.className = 'forget-btn';
+    forgetBtn.textContent = '✕';
+    forgetBtn.title = 'Забыть устройство';
+    forgetBtn.onclick = (e) => {
+      e.stopPropagation();
+      const message =
+        d.status === 'online'
+          ? `Удалить "${d.name}"? Агент на этом устройстве остановится и не будет виден, пока его не запустят заново.`
+          : `Удалить "${d.name}" из списка? Если оно снова выйдет в сеть, появится заново.`;
+      if (confirm(message)) forgetDevice(d.id);
+    };
+    row.appendChild(forgetBtn);
     listEl.appendChild(row);
   }
 }

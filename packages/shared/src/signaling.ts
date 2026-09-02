@@ -91,6 +91,24 @@ export function forgetDevice(deviceId: string) {
   remove(deviceRef(deviceId));
 }
 
+/**
+ * Agent side: notifies when this device's own record has been forgotten
+ * out from under it (i.e. deleted by a client while the agent is still
+ * running/connected, not just an ordinary onDisconnect). Only fires after
+ * the record has actually been observed to exist, so it can't misfire on
+ * the initial empty snapshot before registerDevice's write lands.
+ */
+export function onDeviceRemoved(deviceId: string, cb: () => void): Unsubscribe {
+  let seenExisting = false;
+  return onValue(deviceRef(deviceId), (snap) => {
+    if (snap.exists()) {
+      seenExisting = true;
+    } else if (seenExisting) {
+      cb();
+    }
+  });
+}
+
 // ---------- calls (one viewing session) ----------
 
 type CallRole = 'caller' | 'callee';
