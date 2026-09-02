@@ -35,6 +35,9 @@ object Signaling {
     private val db by lazy { FirebaseDatabase.getInstance() }
     private var signedIn = false
 
+    /** Older than this and an unanswered call node is presumed abandoned. */
+    private const val STALE_CALL_MS = 30_000L
+
     fun init(onReady: () -> Unit) {
         val auth = FirebaseAuth.getInstance()
         if (auth.currentUser != null) {
@@ -114,8 +117,21 @@ object Signaling {
                 if (perCallListeners.containsKey(callId)) return
                 val callValueListener = object : ValueEventListener {
                     override fun onDataChange(snap: DataSnapshot) {
+                        if (handled.contains(callId)) return
                         val offer = snap.child("offer").getValue(SdpPayload::class.java) ?: return
-                        if (handled.add(callId)) cb(callId, offer)
+                        // A call node this stale is a leftover from a caller
+                        // that's long gone (e.g. the app closed without
+                        // hanging up) — answering it would occupy the "one
+                        // call at a time" slot forever with nothing on the
+                        // other end, silently blocking every real call after.
+                        val createdAt = snap.child("createdAt").getValue(Long::class.java) ?: 0L
+                        if (System.currentTimeMillis() - createdAt > STALE_CALL_MS) {
+                            handled.add(callId)
+                            roomRef("calls/$deviceId/$callId").removeValue()
+                            return
+                        }
+                        handled.add(callId)
+                        cb(callId, offer)
                     }
                     override fun onCancelled(error: DatabaseError) {}
                 }

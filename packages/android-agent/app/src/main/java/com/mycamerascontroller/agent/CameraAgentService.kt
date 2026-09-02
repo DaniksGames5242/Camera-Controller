@@ -187,14 +187,26 @@ class CameraAgentService : Service() {
         val callEndedListener = Signaling.onCallEnded(deviceId, callId) {
             if (activeCallId == callId) endActiveCall()
         }
+        // Trickle ICE candidates can arrive (via Firebase) before
+        // setRemoteDescription below has actually completed — queue them and
+        // flush once it succeeds rather than risk them being rejected/lost.
+        var remoteDescSet = false
+        val pendingCandidates = mutableListOf<IceCandidate>()
         val remoteIceListener = Signaling.onRemoteIceCandidates(deviceId, callId, "caller") { c ->
-            pc.addIceCandidate(IceCandidate(c.sdpMid, c.sdpMLineIndex ?: 0, c.candidate))
+            val candidate = IceCandidate(c.sdpMid, c.sdpMLineIndex ?: 0, c.candidate)
+            if (remoteDescSet) pc.addIceCandidate(candidate) else pendingCandidates.add(candidate)
         }
         pendingCallEndedListener = callEndedListener
         pendingRemoteIceListener = remoteIceListener
 
         val remoteDesc = SessionDescription(SessionDescription.Type.OFFER, offer.sdp)
-        pc.setRemoteDescription(SimpleSdpObserver(), remoteDesc)
+        pc.setRemoteDescription(object : SimpleSdpObserver() {
+            override fun onSetSuccess() {
+                remoteDescSet = true
+                pendingCandidates.forEach { pc.addIceCandidate(it) }
+                pendingCandidates.clear()
+            }
+        }, remoteDesc)
         pc.createAnswer(object : SimpleSdpObserver() {
             override fun onCreateSuccess(p0: SessionDescription?) {
                 val desc = p0 ?: return

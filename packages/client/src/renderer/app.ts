@@ -106,15 +106,32 @@ async function openViewer(deviceId: string) {
 
   session = { deviceId, callId, pc, unsub };
 
+  // Trickle ICE candidates from the agent can arrive (via Firebase) before
+  // this side's setRemoteDescription(answer) below has resolved —
+  // addIceCandidate throws with no remote description set yet, so early
+  // candidates must be queued and flushed afterward instead of dropped.
+  let remoteDescSet = false;
+  const pendingCandidates: RTCIceCandidate[] = [];
+
   unsub.push(
     onAnswerSet(deviceId, callId, async (answer) => {
       if (pc.currentRemoteDescription) return;
       await pc.setRemoteDescription(answer as RTCSessionDescriptionInit);
+      remoteDescSet = true;
+      while (pendingCandidates.length) {
+        const c = pendingCandidates.shift()!;
+        await pc.addIceCandidate(c).catch((e) => console.error(e));
+      }
     })
   );
   unsub.push(
     onRemoteIceCandidates(deviceId, callId, 'callee', (candidate) => {
-      pc.addIceCandidate(new RTCIceCandidate(candidate)).catch((e) => console.error(e));
+      const iceCandidate = new RTCIceCandidate(candidate);
+      if (remoteDescSet) {
+        pc.addIceCandidate(iceCandidate).catch((e) => console.error(e));
+      } else {
+        pendingCandidates.push(iceCandidate);
+      }
     })
   );
 

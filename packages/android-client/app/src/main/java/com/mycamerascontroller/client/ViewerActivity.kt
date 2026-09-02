@@ -103,15 +103,28 @@ class ViewerActivity : AppCompatActivity() {
             RtpTransceiver.RtpTransceiverInit(RtpTransceiver.RtpTransceiverDirection.RECV_ONLY)
         )
 
+        // Trickle ICE candidates can arrive (via Firebase) before
+        // setRemoteDescription below has actually completed — queue them and
+        // flush once it succeeds rather than risk them being rejected/lost.
+        var remoteDescSet = false
+        val pendingCandidates = mutableListOf<IceCandidate>()
+
         answerListener = Signaling.onAnswerSet(deviceId, id) { answer ->
             if (pc.remoteDescription != null) return@onAnswerSet
             pc.setRemoteDescription(
-                SimpleSdpObserver(),
+                object : SimpleSdpObserver() {
+                    override fun onSetSuccess() {
+                        remoteDescSet = true
+                        pendingCandidates.forEach { pc.addIceCandidate(it) }
+                        pendingCandidates.clear()
+                    }
+                },
                 SessionDescription(SessionDescription.Type.ANSWER, answer.sdp)
             )
         }
         iceListener = Signaling.onRemoteIceCandidates(deviceId, id, "callee") { c ->
-            pc.addIceCandidate(IceCandidate(c.sdpMid, c.sdpMLineIndex ?: 0, c.candidate))
+            val candidate = IceCandidate(c.sdpMid, c.sdpMLineIndex ?: 0, c.candidate)
+            if (remoteDescSet) pc.addIceCandidate(candidate) else pendingCandidates.add(candidate)
         }
 
         pc.createOffer(object : SimpleSdpObserver() {

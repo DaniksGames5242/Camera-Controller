@@ -45,6 +45,10 @@ app.whenReady().then(() => {
   // Quitting is the actual "stop working" the removal implies; autostart
   // (or a manual relaunch) re-registers it fresh next time it's run.
   ipcMain.on('quit-app', () => app.quit());
+
+  // Temporary: surface renderer diagnostics on stdout for debugging a
+  // black-video-on-remote-side report.
+  ipcMain.on('agent-log', (_e, msg: string) => console.log('[renderer]', msg));
 });
 
 app.on('window-all-closed', () => {

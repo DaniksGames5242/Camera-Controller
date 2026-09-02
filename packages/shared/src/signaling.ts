@@ -113,6 +113,9 @@ export function onDeviceRemoved(deviceId: string, cb: () => void): Unsubscribe {
 
 type CallRole = 'caller' | 'callee';
 
+/** Older than this and an unanswered call node is presumed abandoned. */
+const STALE_CALL_MS = 30_000;
+
 function callsForDeviceRef(deviceId: string) {
   return ref(db!, `rooms/${roomId()}/calls/${deviceId}`);
 }
@@ -179,10 +182,19 @@ export function onIncomingCall(
     if (perCallUnsub.has(callId)) return;
     const stop = onValue(callRef(myDeviceId, callId), (s) => {
       const val = s.val();
-      if (val?.offer && !handled.has(callId)) {
+      if (!val?.offer || handled.has(callId)) return;
+      // A call node this stale is a leftover from a caller that's long gone
+      // (e.g. the app was closed without hanging up) — answering it would
+      // just occupy the "one call at a time" slot forever with nothing on
+      // the other end, silently blocking every real incoming call after it.
+      const ageMs = Date.now() - (val.createdAt ?? 0);
+      if (ageMs > STALE_CALL_MS) {
         handled.add(callId);
-        cb(callId, val.offer as SessionDescriptionPayload);
+        remove(callRef(myDeviceId, callId));
+        return;
       }
+      handled.add(callId);
+      cb(callId, val.offer as SessionDescriptionPayload);
     });
     perCallUnsub.set(callId, stop);
   });
