@@ -9,6 +9,10 @@ on:
       - 'v*'
   workflow_dispatch: {}
 
+# New repos default GITHUB_TOKEN to read-only; publishing a Release needs write.
+permissions:
+  contents: write
+
 jobs:
   agent-windows:
     runs-on: windows-latest
