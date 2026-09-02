@@ -1,55 +1,108 @@
 <!doctype html>
-<html>
+<html lang="ru">
   <head>
     <meta charset="utf-8" />
     <title>MyCamerasController</title>
     <link rel="stylesheet" href="style.css" />
   </head>
   <body>
-    <!-- Ambient holographic backdrop layers (purely decorative) -->
-    <div class="fx-grid" aria-hidden="true"></div>
-    <div class="fx-glow" aria-hidden="true"></div>
-    <div class="fx-scanlines" aria-hidden="true"></div>
-    <div class="fx-vignette" aria-hidden="true"></div>
+    <!--
+      Layer order, back to front:
+        #stage-gl    the hologram itself — room, slabs, dust, optics
+        #slab-layer  DOM chrome projected onto the 3D slabs
+        #ui          screen-space chrome that must stay crisp and reachable
+      Everything else (cursor, palette, toasts, radial menu) is appended by
+      the app at the end of <body>.
+    -->
+    <canvas id="stage-gl"></canvas>
+    <div id="slab-layer" aria-hidden="false"></div>
 
-    <div id="app">
-      <aside id="sidebar">
-        <header id="brand-block">
-          <div class="brand" data-text="MYCAMS//CTRL">MYCAMS<span class="brand-accent">//</span>CTRL</div>
-          <div class="hud-readout"><span id="hud-status">ИНИЦИАЛИЗАЦИЯ…</span></div>
-          <div class="hud-bar"><span class="hud-bar-fill"></span></div>
+    <div id="ui">
+      <aside id="rail">
+        <div class="rail-edge" aria-hidden="true"></div>
+        <header id="brand">
+          <div class="brand-mark" id="brand-mark"></div>
+          <div class="brand-sub">ГОЛОГРАФИЧЕСКИЙ ПУЛЬТ НАБЛЮДЕНИЯ</div>
+          <div class="brand-rule" aria-hidden="true"><i></i></div>
         </header>
-        <div id="device-list"></div>
+
+        <div id="rail-hud">
+          <div class="hud-stat">
+            <span class="hud-key">УЗЛЫ</span>
+            <span class="hud-val" id="stat-nodes">0</span>
+          </div>
+          <div class="hud-stat">
+            <span class="hud-key">В СЕТИ</span>
+            <span class="hud-val ok" id="stat-online">0</span>
+          </div>
+          <div class="hud-stat">
+            <span class="hud-key">КАНАЛЫ</span>
+            <span class="hud-val accent" id="stat-channels">0</span>
+          </div>
+        </div>
+
+        <div class="rail-section-title">
+          <span>УЗЛЫ СЕТИ</span>
+          <i class="rail-section-line" aria-hidden="true"></i>
+        </div>
+
+        <div id="device-scroll">
+          <div id="device-list"></div>
+          <div id="device-empty">
+            <div class="empty-ring" aria-hidden="true"><i></i><i></i><i></i></div>
+            <p class="empty-title">УЗЛЫ НЕ ОБНАРУЖЕНЫ</p>
+            <p class="empty-sub">агенты появятся здесь автоматически,<br />как только выйдут в сеть</p>
+          </div>
+        </div>
+
+        <footer id="rail-foot">
+          <button class="ghost-btn" id="btn-palette">
+            <span class="ghost-glyph">⌘</span>
+            <span class="ghost-label">КОМАНДЫ</span>
+            <kbd>Ctrl K</kbd>
+          </button>
+        </footer>
       </aside>
 
-      <main id="viewer-grid">
-        <p id="viewer-placeholder">
-          <span class="ph-title">НЕТ АКТИВНЫХ КАНАЛОВ</span>
-          <span class="ph-sub">выберите устройство слева — можно открыть сразу несколько</span>
-        </p>
-      </main>
-    </div>
-
-    <div id="settings-modal" class="modal-overlay" hidden>
-      <div class="modal">
-        <div class="modal-corner tl"></div>
-        <div class="modal-corner tr"></div>
-        <div class="modal-corner bl"></div>
-        <div class="modal-corner br"></div>
-        <h3 id="settings-title">Настройки камеры</h3>
-        <label>ШИРИНА (px)<input id="settings-width" type="number" min="0" placeholder="по умолчанию 1280" /></label>
-        <label>ВЫСОТА (px)<input id="settings-height" type="number" min="0" placeholder="по умолчанию 720" /></label>
-        <label>ЧАСТОТА КАДРОВ (fps)<input id="settings-fps" type="number" min="0" placeholder="по умолчанию 30" /></label>
-        <p class="modal-hint">Применяется, когда агент начинает новую трансляцию — на уже открытый просмотр не повлияет.</p>
-        <div class="modal-actions">
-          <button id="settings-cancel">Отмена</button>
-          <button id="settings-save">Сохранить</button>
+      <div id="stage-hud">
+        <div id="stage-title">
+          <span class="stage-title-text" id="stage-title-text"></span>
+          <span class="stage-title-caret" aria-hidden="true"></span>
+        </div>
+        <div id="stage-empty">
+          <div class="stage-empty-frame" aria-hidden="true">
+            <i class="c tl"></i><i class="c tr"></i><i class="c bl"></i><i class="c br"></i>
+          </div>
+          <p class="stage-empty-title">ПРОЕКЦИОННОЕ ПОЛЕ СВОБОДНО</p>
+          <p class="stage-empty-sub">выберите узел слева — каналы открываются один поверх другого</p>
         </div>
       </div>
-    </div>
 
-    <div id="boot-overlay" aria-hidden="true">
-      <pre id="boot-text"></pre>
+      <div id="dock">
+        <button class="dock-btn" id="dock-scan" data-hint="Прогнать сканирующую плоскость по залу">
+          <span class="dock-glyph">◈</span><span class="dock-label">СКАН</span>
+        </button>
+        <button class="dock-btn" id="dock-layout" data-hint="Переключить раскладку каналов">
+          <span class="dock-glyph">▦</span><span class="dock-label">РАСКЛАДКА</span>
+        </button>
+        <button class="dock-btn" id="dock-recall" data-hint="Вернуть камеру в исходное положение">
+          <span class="dock-glyph">⌾</span><span class="dock-label">КАМЕРА</span>
+        </button>
+        <div class="dock-sep" aria-hidden="true"></div>
+        <div class="dock-meter" id="dock-meter" title="Нагрузка рендера">
+          <i class="dock-meter-fill"></i>
+          <span class="dock-meter-label">GPU</span>
+        </div>
+      </div>
+
+      <div id="hint-bar">
+        <span><kbd>Ctrl</kbd><kbd>K</kbd> команды</span>
+        <span><kbd>1</kbd>…<kbd>9</kbd> фокус на канале</span>
+        <span><kbd>R</kbd> запись</span>
+        <span><kbd>M</kbd> микрофон</span>
+        <span><kbd>Esc</kbd> закрыть</span>
+        <span class="hint-drag">ПКМ по узлу — меню · перетаскивание — облёт зала</span>
+      </div>
     </div>
 
     <script src="app.js"></script>
