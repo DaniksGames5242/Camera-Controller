@@ -66,6 +66,18 @@ async function handleCall(myId: string, callId: string, offer: SessionDescriptio
   const pc = createPeerConnection();
   stream.getTracks().forEach((track) => pc.addTrack(track, stream));
 
+  // Talk-back: the viewer can optionally send their own mic audio (the
+  // audio transceiver is negotiated sendrecv from their side) — play
+  // whatever comes back through this device's speakers.
+  let talkbackAudio: HTMLAudioElement | null = null;
+  pc.ontrack = (e) => {
+    if (e.track.kind !== 'audio') return;
+    talkbackAudio?.remove();
+    talkbackAudio = new Audio();
+    talkbackAudio.autoplay = true;
+    talkbackAudio.srcObject = e.streams[0] ?? new MediaStream([e.track]);
+  };
+
   pc.onicecandidate = (e) => {
     if (e.candidate) {
       sendIceCandidate(myId, callId, 'callee', toPayload(e.candidate));
@@ -81,6 +93,7 @@ async function handleCall(myId: string, callId: string, offer: SessionDescriptio
     cleaned = true;
     clearInterval(statsInterval);
     stream.getTracks().forEach((t) => t.stop()); // camera/mic physically turn off
+    talkbackAudio?.remove();
     pc.close();
     unsubEnded();
     unsubCandidates();

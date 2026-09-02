@@ -27,7 +27,8 @@ linux:
 portable:
   artifactName: ${productName}-${version}-portable.${ext}
 
-# type 2 AppImage runtime; also handles systems without FUSE via
-# --appimage-extract-and-run, which the app falls back to itself (see main.ts).
+# electron-builder bundles a modern type2 AppImage runtime that automatically
+# falls back to extract-and-run on systems without FUSE — no app-level code
+# needed for that, and no flag the user has to remember to pass.
 appImage:
   artifactName: ${productName}-${version}.${ext}

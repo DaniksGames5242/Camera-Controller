@@ -7,4 +7,10 @@
     <string name="forget_device_confirm">Удалить это устройство из списка? Если оно снова выйдет в сеть, появится заново.</string>
     <string name="forget_device_confirm_online">Удалить это устройство? Агент на нём остановится и не будет виден, пока его не запустят заново.</string>
     <string name="forget_device">Забыть</string>
+    <string name="enable_mic">🎤 Включить микрофон</string>
+    <string name="disable_mic">🎤 Выключить микрофон</string>
+    <string name="camera_settings">Настройки камеры</string>
+    <string name="settings_hint">Применяется агентом при следующем новом подключении — на уже открытый просмотр не повлияет.</string>
+    <string name="save">Сохранить</string>
+    <string name="cancel">Отмена</string>
 </resources>

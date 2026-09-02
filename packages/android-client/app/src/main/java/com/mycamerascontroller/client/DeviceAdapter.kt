@@ -3,12 +3,14 @@ package com.mycamerascontroller.client
 import android.view.LayoutInflater
 import android.view.View
 import android.view.ViewGroup
+import android.widget.ImageButton
 import android.widget.TextView
 import androidx.recyclerview.widget.RecyclerView
 
 class DeviceAdapter(
     private val onClick: (DeviceWithId) -> Unit,
     private val onLongClick: (DeviceWithId) -> Unit,
+    private val onSettingsClick: (DeviceWithId) -> Unit,
 ) : RecyclerView.Adapter<DeviceAdapter.ViewHolder>() {
 
     private var devices: List<DeviceWithId> = emptyList()
@@ -22,6 +24,7 @@ class DeviceAdapter(
         val dot: View = view.findViewById(R.id.statusDot)
         val name: TextView = view.findViewById(R.id.deviceName)
         val status: TextView = view.findViewById(R.id.deviceStatus)
+        val settingsButton: ImageButton = view.findViewById(R.id.settingsButton)
     }
 
     override fun onCreateViewHolder(parent: ViewGroup, viewType: Int): ViewHolder {
@@ -46,5 +49,6 @@ class DeviceAdapter(
         // record if this one is never cleaned up), but allowed for any
         // device since a stale "online" entry can also happen.
         holder.itemView.setOnLongClickListener { onLongClick(device); true }
+        holder.settingsButton.setOnClickListener { onSettingsClick(device) }
     }
 }

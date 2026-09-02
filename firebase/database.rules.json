@@ -3,7 +3,69 @@
     "rooms": {
       "$roomId": {
         ".read": "auth != null",
-        ".write": "auth != null"
+
+        "devices": {
+          "$deviceId": {
+            ".write": "auth != null",
+            ".validate": "newData.hasChildren(['name', 'platform', 'status', 'lastSeen'])",
+            "name": { ".validate": "newData.isString() && newData.val().length <= 100" },
+            "platform": { ".validate": "newData.isString() && (newData.val() == 'windows' || newData.val() == 'linux' || newData.val() == 'android')" },
+            "status": { ".validate": "newData.isString() && (newData.val() == 'online' || newData.val() == 'offline')" },
+            "lastSeen": { ".validate": "newData.isNumber()" },
+            "$other": { ".validate": false }
+          }
+        },
+
+        "deviceSettings": {
+          "$deviceId": {
+            ".write": "auth != null",
+            "width": { ".validate": "newData.isNumber() && newData.val() > 0 && newData.val() <= 7680" },
+            "height": { ".validate": "newData.isNumber() && newData.val() > 0 && newData.val() <= 4320" },
+            "frameRate": { ".validate": "newData.isNumber() && newData.val() > 0 && newData.val() <= 60" },
+            "$other": { ".validate": false }
+          }
+        },
+
+        "calls": {
+          "$deviceId": {
+            "$callId": {
+              ".write": "auth != null",
+              "createdAt": { ".validate": "newData.isNumber()" },
+              "status": { ".validate": "newData.isString()" },
+              "offer": {
+                "type": { ".validate": "newData.isString()" },
+                "sdp": { ".validate": "newData.isString() && newData.val().length <= 20000" },
+                "$other": { ".validate": false }
+              },
+              "answer": {
+                "type": { ".validate": "newData.isString()" },
+                "sdp": { ".validate": "newData.isString() && newData.val().length <= 20000" },
+                "$other": { ".validate": false }
+              },
+              "candidates": {
+                "caller": {
+                  "$candidateId": {
+                    "candidate": { ".validate": "newData.isString() && newData.val().length <= 1000" },
+                    "sdpMid": { ".validate": "newData.val() == null || newData.isString()" },
+                    "sdpMLineIndex": { ".validate": "newData.val() == null || newData.isNumber()" },
+                    "$other": { ".validate": false }
+                  }
+                },
+                "callee": {
+                  "$candidateId": {
+                    "candidate": { ".validate": "newData.isString() && newData.val().length <= 1000" },
+                    "sdpMid": { ".validate": "newData.val() == null || newData.isString()" },
+                    "sdpMLineIndex": { ".validate": "newData.val() == null || newData.isNumber()" },
+                    "$other": { ".validate": false }
+                  }
+                }
+              },
+              "$other": { ".validate": false }
+            }
+          }
+        },
+
+        "$other": { ".validate": false }
       }
     },
     ".read": false,

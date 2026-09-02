@@ -33,6 +33,12 @@ data class IceCandidatePayload @JvmOverloads constructor(
     var sdpMLineIndex: Int? = null,
 )
 
+data class DeviceSettings @JvmOverloads constructor(
+    var width: Int? = null,
+    var height: Int? = null,
+    var frameRate: Int? = null,
+)
+
 object Signaling {
     private val db by lazy { FirebaseDatabase.getInstance() }
 
@@ -75,6 +81,16 @@ object Signaling {
      */
     fun forgetDevice(deviceId: String) {
         roomRef("devices/$deviceId").removeValue()
+    }
+
+    fun getDeviceSettings(deviceId: String, cb: (DeviceSettings) -> Unit) {
+        roomRef("deviceSettings/$deviceId").get()
+            .addOnSuccessListener { snap -> cb(snap.getValue(DeviceSettings::class.java) ?: DeviceSettings()) }
+            .addOnFailureListener { cb(DeviceSettings()) }
+    }
+
+    fun setDeviceSettings(deviceId: String, settings: DeviceSettings) {
+        roomRef("deviceSettings/$deviceId").setValue(settings)
     }
 
     fun createCall(targetDeviceId: String): String {

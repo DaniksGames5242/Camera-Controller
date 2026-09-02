@@ -1,12 +1,20 @@
+<!-- Agent icon: a camera actively broadcasting (signal arcs) — distinct from
+     the client's "eye" icon so the two apps are never confused on a device. -->
 <vector xmlns:android="http://schemas.android.com/apk/res/android"
     android:width="108dp"
     android:height="108dp"
     android:viewportWidth="24"
     android:viewportHeight="24">
     <path
-        android:fillColor="#2A2A2A"
+        android:fillColor="#241414"
         android:pathData="M0,0h24v24h-24z" />
     <path
-        android:fillColor="#3ECF6A"
-        android:pathData="M17,10.5V7a1,1 0,0 0,-1 -1H4A1,1 0,0 0,3 7v10a1,1 0,0 0,1 1h12a1,1 0,0 0,1 -1v-3.5l4,4v-11z" />
+        android:fillColor="#E5484D"
+        android:pathData="M15,10.5V7a1,1 0,0 0,-1 -1H4A1,1 0,0 0,3 7v10a1,1 0,0 0,1 1h10a1,1 0,0 0,1 -1v-3.5l4,4v-11z" />
+    <path
+        android:fillColor="#F3A0A3"
+        android:pathData="M18.5,5.5c1.7,1.7 1.7,4.4 0,6.1l-1.1,-1.1c1.1,-1.1 1.1,-2.9 0,-4l1.1,-1z" />
+    <path
+        android:fillColor="#F3A0A3"
+        android:pathData="M20.8,3.2c3,3 3,7.8 0,10.8l-1.1,-1.1c2.3,-2.3 2.3,-6.1 0,-8.5l1.1,-1.2z" />
 </vector>

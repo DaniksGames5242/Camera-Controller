@@ -13,6 +13,7 @@ import {
   createPeerConnection,
   type DeviceWithId,
   type IceCandidatePayload,
+  type DeviceSettings,
 } from '@mcc/shared';
 
 declare global {
@@ -49,9 +50,15 @@ interface Session {
   tile: HTMLElement;
   video: HTMLVideoElement;
   recDot: HTMLElement;
+  recordBtn: HTMLButtonElement;
+  micBtn: HTMLButtonElement;
+  audioSender: RTCRtpSender;
+  micTrack?: MediaStreamTrack;
+  stream?: MediaStream;
   recorder?: MediaRecorder;
   recordingId?: string;
   startIso?: string;
+  recordingWanted: boolean; // user can turn recording off for this session
 }
 const sessions = new Map<string, Session>();
 
@@ -72,7 +79,16 @@ function renderList() {
     const row = document.createElement('div');
     const isOpen = sessions.has(d.id);
     row.className = `device ${d.status}` + (isOpen ? ' open' : '');
-    row.innerHTML = `<span class="dot ${d.status}"></span><span class="device-name">${d.name}</span>`;
+    // Built with real DOM nodes, not innerHTML: d.name/d.status come from an
+    // agent's own Firebase record — a compromised or malicious agent could
+    // set its name to arbitrary markup, and innerHTML would execute it in
+    // this (privileged, filesystem-writing) renderer process.
+    const dot = document.createElement('span');
+    dot.className = `dot ${d.status}`;
+    const nameSpan = document.createElement('span');
+    nameSpan.className = 'device-name';
+    nameSpan.textContent = d.name;
+    row.append(dot, nameSpan);
     if (d.status === 'online' && !isOpen) {
       row.onclick = () => openViewer(d.id, d.name);
     }
@@ -144,6 +160,46 @@ function stopRecording(session: Session) {
   if (session.recordingId && session.startIso) {
     window.mcc.finishRecording(session.recordingId, new Date().toISOString());
   }
+  session.recorder = undefined;
+  session.recordingId = undefined;
+  session.startIso = undefined;
+  session.recDot.hidden = true;
+}
+
+function toggleRecording(session: Session) {
+  if (session.recorder) {
+    session.recordingWanted = false;
+    stopRecording(session);
+    session.recordBtn.textContent = 'Включить запись';
+  } else if (session.stream) {
+    session.recordingWanted = true;
+    startRecording(session, session.stream);
+    session.recordBtn.textContent = 'Остановить запись';
+  }
+}
+
+// ---------- talk-back microphone ----------
+// Requests the mic (and prompts for OS permission) only on first press, not
+// up front when the viewer opens — the audio transceiver was already
+// negotiated sendrecv, so attaching the track here needs no renegotiation.
+
+async function toggleMic(session: Session) {
+  if (!session.micTrack) {
+    let micStream: MediaStream;
+    try {
+      micStream = await navigator.mediaDevices.getUserMedia({ audio: true });
+    } catch (err) {
+      console.error('mic getUserMedia failed', err);
+      alert('Не удалось получить доступ к микрофону.');
+      return;
+    }
+    session.micTrack = micStream.getAudioTracks()[0];
+    await session.audioSender.replaceTrack(session.micTrack);
+    session.micBtn.textContent = '🎤 Выключить микрофон';
+    return;
+  }
+  session.micTrack.enabled = !session.micTrack.enabled;
+  session.micBtn.textContent = session.micTrack.enabled ? '🎤 Выключить микрофон' : '🎤 Включить микрофон';
 }
 
 // ---------- viewing sessions ----------
@@ -152,6 +208,7 @@ function closeSession(deviceId: string) {
   const session = sessions.get(deviceId);
   if (!session) return;
   stopRecording(session);
+  session.micTrack?.stop();
   session.unsub.forEach((u) => u());
   session.pc.close();
   endCall(session.deviceId, session.callId);
@@ -178,11 +235,22 @@ async function openViewer(deviceId: string, deviceName: string) {
   const labelText = document.createElement('span');
   labelText.textContent = deviceName;
   label.append(recDot, labelText);
+  const actions = document.createElement('div');
+  actions.className = 'tile-actions';
+  const recordBtn = document.createElement('button');
+  recordBtn.className = 'tile-btn';
+  recordBtn.textContent = 'Остановить запись';
+  recordBtn.onclick = () => toggleRecording(session);
+  const micBtn = document.createElement('button');
+  micBtn.className = 'tile-btn';
+  micBtn.textContent = '🎤 Включить микрофон';
+  micBtn.onclick = () => toggleMic(session);
   const closeBtn = document.createElement('button');
-  closeBtn.className = 'tile-close';
+  closeBtn.className = 'tile-btn';
   closeBtn.textContent = 'Закрыть';
   closeBtn.onclick = () => closeSession(deviceId);
-  tile.append(video, label, closeBtn);
+  actions.append(recordBtn, micBtn, closeBtn);
+  tile.append(video, label, actions);
   gridEl.appendChild(tile);
   updateGridColumns();
 
@@ -190,13 +258,35 @@ async function openViewer(deviceId: string, deviceName: string) {
   const pc = createPeerConnection();
   const unsub: Array<() => void> = [];
 
-  const session: Session = { deviceId, deviceName, callId, pc, unsub, tile, video, recDot };
+  // Audio is negotiated sendrecv from the start (even with no local track
+  // yet) so pressing the mic button later can just attach a track via
+  // replaceTrack() — no renegotiation round-trip needed. Video stays
+  // receive-only since the client never sends its own camera.
+  const audioTransceiver = pc.addTransceiver('audio', { direction: 'sendrecv' });
+  pc.addTransceiver('video', { direction: 'recvonly' });
+
+  const session: Session = {
+    deviceId,
+    deviceName,
+    callId,
+    pc,
+    unsub,
+    tile,
+    video,
+    recDot,
+    recordBtn,
+    micBtn,
+    audioSender: audioTransceiver.sender,
+    recordingWanted: true,
+  };
   sessions.set(deviceId, session);
   renderList();
 
   pc.ontrack = (e) => {
+    if (e.track.kind !== 'video') return; // the agent's mic reply, if any, needs no local playback here
     video.srcObject = e.streams[0];
-    if (!session.recorder) startRecording(session, e.streams[0]);
+    session.stream = e.streams[0];
+    if (!session.recorder && session.recordingWanted) startRecording(session, e.streams[0]);
   };
 
   // Trickle ICE candidates from the agent can arrive (via Firebase) before
@@ -236,7 +326,7 @@ async function openViewer(deviceId: string, deviceName: string) {
     })
   );
 
-  const offer = await pc.createOffer({ offerToReceiveVideo: true, offerToReceiveAudio: true });
+  const offer = await pc.createOffer();
   await pc.setLocalDescription(offer);
   sendOffer(deviceId, callId, { type: offer.type, sdp: offer.sdp! });
 }
@@ -266,10 +356,16 @@ function closeSettingsModal() {
 settingsCancel.onclick = closeSettingsModal;
 settingsSave.onclick = () => {
   if (!settingsTargetDeviceId) return;
-  const width = Number(settingsWidth.value) || undefined;
-  const height = Number(settingsHeight.value) || undefined;
-  const frameRate = Number(settingsFps.value) || undefined;
-  setDeviceSettings(settingsTargetDeviceId, { width, height, frameRate });
+  // Firebase's set() throws if the object contains an `undefined` value —
+  // omit blank fields entirely rather than passing them as undefined.
+  const patch: DeviceSettings = {};
+  const width = Number(settingsWidth.value);
+  const height = Number(settingsHeight.value);
+  const frameRate = Number(settingsFps.value);
+  if (width > 0) patch.width = width;
+  if (height > 0) patch.height = height;
+  if (frameRate > 0) patch.frameRate = frameRate;
+  setDeviceSettings(settingsTargetDeviceId, patch);
   closeSettingsModal();
 };
 settingsModal.onclick = (e) => {

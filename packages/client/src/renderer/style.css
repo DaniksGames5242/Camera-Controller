@@ -42,12 +42,12 @@ body { margin: 0; font-family: system-ui, sans-serif; background: #111; color: #
   display: flex; align-items: center; gap: 6px;
 }
 .rec-dot { width: 8px; height: 8px; border-radius: 50%; background: #e5484d; flex-shrink: 0; }
-.tile-close {
-  position: absolute; top: 8px; right: 8px;
+.tile-actions { position: absolute; top: 8px; right: 8px; display: flex; gap: 6px; }
+.tile-btn {
   padding: 4px 10px; background: rgba(42, 42, 42, 0.85); color: #eee;
   border: 1px solid #444; border-radius: 6px; cursor: pointer; font-size: 12px;
 }
-.tile-close:hover { background: #3a3a3a; }
+.tile-btn:hover { background: #3a3a3a; }
 
 .modal-overlay {
   position: fixed; inset: 0; background: rgba(0, 0, 0, 0.5);
