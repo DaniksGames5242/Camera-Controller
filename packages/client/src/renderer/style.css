@@ -927,7 +927,7 @@ kbd {
   display: flex;
   flex-direction: column;
   gap: 22px;
-  padding: 34px 40px;
+  padding: 34px 56px;
   color: #eafcff;
   opacity: 0;
   pointer-events: auto;
@@ -1000,7 +1000,7 @@ kbd {
   background: transparent;
   color: #eafcff;
   font-family: inherit;
-  font-size: 30px;
+  font-size: 26px;
   font-weight: 600;
   font-variant-numeric: tabular-nums;
   outline: none;

@@ -32,7 +32,10 @@ export class BootSequence {
   private readonly overlay: HTMLElement;
   private readonly readout: HTMLElement;
   private readonly hint: HTMLElement;
-  private elapsed = 0;
+  /** Wall clock, not accumulated frame deltas: the ticker clamps dt to keep
+      springs stable, which on a slow machine would stretch this sequence to
+      several times its intended length. */
+  private startedAt = 0;
   private emitted = 0;
   private skipped = false;
   private done = false;
@@ -81,6 +84,7 @@ export class BootSequence {
         })
       );
 
+      this.startedAt = performance.now();
       window.addEventListener('keydown', this.onSkip, { once: true });
       window.addEventListener('pointerdown', this.onSkip, { once: true });
       this.stopTicker = ticker.add(this.tick);
@@ -93,8 +97,7 @@ export class BootSequence {
   };
 
   private tick = (dt: number) => {
-    this.elapsed += dt;
-    const t = this.elapsed;
+    const t = (performance.now() - this.startedAt) / 1000;
 
     // --- the room powers on ------------------------------------------------
     this.stage.boot = clamp(smoothstep(0.05, 1.5, t) * 0.55 + smoothstep(2.4, 3.3, t) * 0.45, 0, 1);

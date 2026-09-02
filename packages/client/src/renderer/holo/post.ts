@@ -144,7 +144,7 @@ void main() {
 
   // --- pointer light bloom -------------------------------------------------
   vec2 pd = (uv - (uPointer * 0.5 + 0.5)) * vec2(uResolution.x / uResolution.y, 1.0);
-  col += mix(HOLO_CYAN, HOLO_MINT, 0.4) * exp(-dot(pd, pd) * 90.0) * 0.35;
+  col += mix(HOLO_CYAN, HOLO_MINT, 0.4) * exp(-dot(pd, pd) * 190.0) * 0.16;
 
   // --- vignette + edge flicker ---------------------------------------------
   float vig = smoothstep(1.05, 0.28, r);
@@ -154,7 +154,7 @@ void main() {
   // --- boot iris -----------------------------------------------------------
   col *= smoothstep(0.0, 0.35, uBoot);
 
-  col = tonemapACES(col * 0.92);
+  col = tonemapACES(col * 1.02);
 
   // --- grain: applied after tone mapping so it survives into the blacks ----
   float grain = hash13(vec3(gl_FragCoord.xy, uTime * 91.0)) - 0.5;
@@ -237,7 +237,7 @@ export class PostChain {
     const t = this.threshold.use();
     t.tex('uScene', 0, this.scene.texture);
     t.v2('uTexel', 1 / this.scene.width, 1 / this.scene.height);
-    t.f('uThreshold', 0.82);
+    t.f('uThreshold', 0.72);
     t.f('uKnee', 0.26);
     this.quad.draw();
 
@@ -264,7 +264,7 @@ export class PostChain {
     c.f('uGlitch', Math.min(1, interaction.glitch));
     c.f('uEnergy', interaction.energy);
     c.f('uBoot', boot);
-    c.f('uBloomStrength', 0.60);
+    c.f('uBloomStrength', 0.78);
     c.f('uAberration', reduceMotion ? 0.35 : 1);
     c.f('uReduceMotion', reduceMotion ? 1 : 0);
     c.v2('uPointer', interaction.smoothX, interaction.smoothY);

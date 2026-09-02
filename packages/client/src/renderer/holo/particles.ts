@@ -84,22 +84,28 @@ void main() {
     vel += cross(d / dist, vec3(0.0, 1.0, 0.0)) * falloff * b.w * 9.0 * dt;
   }
 
-  // --- target assembly ----------------------------------------------------
-  if (uHasTargets > 0.5 && uTargetMix > 0.001) {
-    vec3 target = texture(uTargetTex, vUv).xyz;
-    vec3 toTarget = target - pos;
-    // A genuinely critically damped spring (c = 2√k): the swarm converges
-    // on the glyphs without the overshoot that turns the mark into a blur.
-    float k = 58.0 * uTargetMix * uTargetMix;
-    float c = 2.0 * sqrt(k);
-    vel += (toTarget * k - vel * c) * dt;
-    // A little shimmer so the formed mark still breathes.
-    vel += hash33(pos * 3.1 + seed * 17.0 + uTime) * 0.9 * uTargetMix * dt;
-  }
-
   // --- integrate ----------------------------------------------------------
   vel *= exp(-dt * 1.15);
-  pos += vel * dt;
+
+  if (uHasTargets > 0.5 && uTargetMix > 0.001) {
+    vec3 target = texture(uTargetTex, vUv).xyz;
+    // Exact closed-form solution of a critically damped spring over dt.
+    // An explicit integrator here is not merely inaccurate: at the stiffness
+    // needed to hold legible glyphs it settles into a limit cycle and the
+    // mark never resolves. This form is unconditionally stable, identical at
+    // 30 and 144 fps, and degenerates cleanly to free drift as omega goes to
+    // zero — which is exactly what dispersal needs.
+    float omega = 9.0 * uTargetMix;
+    float expo = exp(-omega * dt);
+    vec3 rel = pos - target;
+    vec3 blend = (vel + rel * omega) * dt;
+    vel = (vel - blend * omega) * expo;
+    pos = target + (rel + blend) * expo;
+    // A little shimmer so the formed mark still breathes.
+    vel += hash33(pos * 3.1 + seed * 17.0 + uTime) * 26.0 * uTargetMix * dt;
+  } else {
+    pos += vel * dt;
+  }
 
   // Floor: inelastic bounce with a touch of scatter.
   if (pos.y < uFloorY) {
@@ -142,6 +148,7 @@ uniform float uPointScale;
 uniform float uTime;
 uniform float uEnergy;
 uniform float uBoot;
+uniform float uAssembly;   // 1 while the swarm is holding a shape
 
 out vec3 vColor;
 out float vAlpha;
@@ -179,7 +186,7 @@ void main() {
   // motes, which reads as depth of field rather than as uniform noise.
   float sizeVar = 0.30 + 2.2 * pow(hash11(float(gl_VertexID) * 0.37), 3.0);
   float depthScale = uPointScale / max(clip.w, 0.6);
-  gl_PointSize = clamp(depthScale * sizeVar * (0.55 + speed * 1.6), 1.5, 70.0);
+  gl_PointSize = clamp(depthScale * sizeVar * (0.55 + speed * 1.6) * (1.0 + uAssembly * 0.45), 1.5, 70.0);
 
   // Colour by velocity: slow dust reads cyan, fast plasma shifts magenta,
   // so the field visibly reports how agitated the system is.
@@ -194,7 +201,11 @@ void main() {
   // ever pops into or out of existence.
   float fadeIn = smoothstep(0.0, 0.12, 1.0 - life);
   float fadeOut = smoothstep(0.0, 0.3, life);
-  vAlpha = clamp(fadeIn * fadeOut, 0.0, 1.0) * (0.16 + 0.42 * speed) * uBoot;
+  vAlpha = clamp(fadeIn * fadeOut, 0.0, 1.0) * (0.09 + 0.30 * speed) * uBoot;
+  // Assembled dust is doing a job — reading as a word — so it is lit for it:
+  // brighter, whiter and slightly larger than the same dust drifting free.
+  vAlpha *= 1.0 + uAssembly * 3.2;
+  vColor = mix(vColor, vec3(0.85, 0.98, 1.0), uAssembly * 0.55);
 }
 `;
 
@@ -211,10 +222,10 @@ void main() {
   if (r2 > 1.0) discard;
   // Tight core plus a wide halo — the profile a real light source has, and
   // what makes the bloom pass downstream look like glow rather than blur.
-  float core = exp(-r2 * 4.0);
-  float halo = exp(-r2 * 1.3) * 0.45;
+  float core = exp(-r2 * 6.5);
+  float halo = exp(-r2 * 1.7) * 0.28;
   float a = (core + halo) * vAlpha;
-  fragColor = vec4(vColor * (core * 2.2 + halo * 0.8), a);
+  fragColor = vec4(vColor * (core * 1.7 + halo * 0.6), a);
 }
 `;
 
@@ -399,16 +410,22 @@ export class ParticleSystem {
     p.f('uTime', time);
     p.f('uEnergy', interaction.energy);
     p.f('uBoot', boot);
+    p.f('uAssembly', this.targetMix);
 
     gl.enable(gl.BLEND);
     // Additive: overlapping particles accumulate into hot cores, which is
     // exactly what the bloom pass is looking for.
     gl.blendFunc(gl.SRC_ALPHA, gl.ONE);
+    // Depth-tested but not depth-writing: dust in front of a slab still
+    // drifts across it, dust behind one is correctly hidden — without which
+    // the whole swarm washes over every picture in the room.
+    gl.enable(gl.DEPTH_TEST);
     gl.depthMask(false);
     gl.bindVertexArray(this.emptyVao);
     gl.drawArrays(gl.POINTS, 0, this.count);
     gl.bindVertexArray(null);
     gl.depthMask(true);
+    gl.disable(gl.DEPTH_TEST);
     gl.disable(gl.BLEND);
   }
 

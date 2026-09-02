@@ -147,7 +147,7 @@ export class HoloStage {
     const dt = clamp(rawDt, 1 / 240, 1 / 20);
     this.time += dt;
 
-    this.governQuality(rawDt * 1000);
+    this.governQuality(rawDt * 1000, dt);
     this.resize();
 
     this.interaction.update(dt, this.time);
@@ -173,7 +173,7 @@ export class HoloStage {
       this.camera,
       this.time,
       this.interaction,
-      this.height * 0.20 * (0.7 + 0.3 * this.quality),
+      this.height * 0.115 * (0.7 + 0.3 * this.quality),
       Math.max(0.08, this.boot)
     );
 
@@ -184,14 +184,17 @@ export class HoloStage {
    * Keeps the frame budget by trading resolution first and shader detail
    * second — the ordering that costs the least perceived fidelity.
    */
-  private governQuality(frameMs: number) {
-    this.frameCost = damp(this.frameCost, clamp(frameMs, 1, 200), 2.5, 1 / 60);
+  private governQuality(frameMs: number, dt: number) {
+    this.frameCost = damp(this.frameCost, clamp(frameMs, 1, 500), 2.5, dt);
+    // Rates are per second, not per frame. Per-frame steps would mean the
+    // slower the machine, the slower the governor reacts — exactly backwards,
+    // and on a really slow renderer it never catches up at all.
     if (this.frameCost > 26) {
-      this.quality = Math.max(0, this.quality - 0.02);
-      if (this.quality <= 0.02) this.renderScale = Math.max(0.55, this.renderScale - 0.01);
+      this.quality = Math.max(0, this.quality - dt * 1.2);
+      if (this.quality <= 0.02) this.renderScale = Math.max(0.5, this.renderScale - dt * 0.35);
     } else if (this.frameCost < 13) {
-      if (this.renderScale < 1) this.renderScale = Math.min(1, this.renderScale + 0.004);
-      else this.quality = Math.min(1, this.quality + 0.01);
+      if (this.renderScale < 1) this.renderScale = Math.min(1, this.renderScale + dt * 0.12);
+      else this.quality = Math.min(1, this.quality + dt * 0.3);
     }
   }
 

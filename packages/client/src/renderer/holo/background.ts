@@ -79,13 +79,13 @@ vec3 floorShade(vec3 p, float dist) {
 
   // Distance fade plus a grazing-angle fade, so the lattice dissolves into
   // the haze instead of aliasing into moire at the horizon.
-  float fade = exp(-dist * 0.038);
+  float fade = exp(-dist * 0.030);
 
   // Hue drifts across the floor so the room is never one flat colour.
   vec3 tint = mix(HOLO_CYAN, HOLO_VIOLET, smoothstep(-18.0, 18.0, p.x) * 0.7);
   tint = mix(tint, HOLO_MINT, smoothstep(20.0, -20.0, p.z) * 0.25);
 
-  vec3 col = tint * (seam * 0.10 + seamCore * 0.42 + grid * 0.10);
+  vec3 col = tint * (seam * 0.13 + seamCore * 0.55 + grid * 0.13);
   col += HOLO_MINT * lit_cell * (1.0 - seam) * 0.16;
   col += mix(HOLO_CYAN, HOLO_MAGENTA, 0.5) * rings * 1.8;
 
@@ -160,7 +160,7 @@ void main() {
   for (int i = 0; i < 48; i++) {
     if (i >= steps || transmittance < 0.02) break;
     vec3 p = ro + rd * t;
-    float d = mediumDensity(p) * 0.09;
+    float d = mediumDensity(p) * 0.055;
     if (d > 0.001) {
       // Emitter cone: a shaft of light pouring down the stage axis.
       float axial = length(p.xz);
@@ -172,12 +172,18 @@ void main() {
       vec2 cellUv = fract(p.xz * 0.22) - 0.5;
       float beam = step(0.955, beamSeed) * exp(-dot(cellUv, cellUv) * 90.0)
                  * (0.5 + 0.5 * sin(p.y * 3.0 - uTime * 6.0 + beamSeed * 40.0));
-      vec3 lit = mix(HOLO_CYAN, HOLO_VIOLET, smoothstep(-4.0, 8.0, p.y));
-      lit += HOLO_MAGENTA * shaft * 0.85;
-      lit += HOLO_MINT * beam * 3.0;
-      lit *= 0.5 + 1.6 * shaft;
-      fog += lit * d * transmittance * stepLen * 0.55;
-      transmittance *= exp(-d * stepLen * 0.5);
+
+      vec3 lit = mix(HOLO_CYAN, HOLO_VIOLET, smoothstep(-4.0, 8.0, p.y)) * 0.30;
+      lit += HOLO_MAGENTA * shaft * 0.28;
+      lit += HOLO_MINT * beam * 1.1;
+
+      // Emission-absorption integral. Accumulating density times stepLen
+      // directly is unbounded — with a long ray and a dense medium it
+      // saturates to white — whereas weighting by the segment's own
+      // absorption keeps the result bounded by the brightest sample.
+      float absorb = 1.0 - exp(-d * stepLen);
+      fog += lit * absorb * transmittance;
+      transmittance *= 1.0 - absorb;
     }
     t += stepLen;
   }
@@ -185,8 +191,8 @@ void main() {
 
   // --- pointer aura: the cursor genuinely lights the medium ---------------
   vec2 pd = (uv - uPointer) * vec2(uAspect, 1.0);
-  float aura = exp(-dot(pd, pd) * 5.0);
-  col += mix(HOLO_CYAN, HOLO_MINT, 0.5) * aura * (0.05 + 0.10 * uEnergy);
+  float aura = exp(-dot(pd, pd) * 9.0);
+  col += mix(HOLO_CYAN, HOLO_MINT, 0.5) * aura * (0.022 + 0.055 * uEnergy);
 
   // --- boot: the room powers on from a single point of light --------------
   float bootMask = mix(smoothstep(0.0, 0.9, uBoot), 1.0, uReduceMotion);

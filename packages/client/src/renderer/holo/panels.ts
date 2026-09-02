@@ -64,6 +64,7 @@ uniform float uAspectFix;     // video aspect / slab aspect, for cover fitting
 uniform float uRelief;        // parallax relief depth
 uniform vec3  uTint;
 uniform float uSignal;        // 0 = no stream yet, 1 = live
+uniform float uPlate;         // 1 = a console surface rather than a feed
 uniform float uQuality;
 
 ${NOISE}
@@ -151,20 +152,23 @@ void main() {
   float syncBar = exp(-abs(fract(uv.y + uTime * 0.35) - 0.5) * 14.0);
 
   vec3 noSignal = HOLO_CYAN * hexEdge * 0.06;
+  // A console plate is a working surface, not a dead channel: it gets a
+  // deep glass body so text on it stays readable over whatever is behind.
+  noSignal = mix(noSignal, HOLO_CYAN * hexEdge * 0.05 + vec3(0.012, 0.034, 0.058), uPlate);
   noSignal += HOLO_MINT * cellPulse * (1.0 - hexEdge) * 0.05;
   noSignal += vec3(0.35, 0.75, 0.9) * staticNoise * 0.13;
   noSignal += HOLO_CYAN * syncBar * 0.12;
   // Hold the plate below unity before anything additive is layered on:
   // real camera feeds are often near-white, and a hologram that clips to a
   // flat sheet stops looking like light passing through anything.
-  vec3 base = mix(noSignal, video, uSignal * uHasVideo) * 0.66;
+  vec3 base = mix(noSignal, video, uSignal * uHasVideo) * 0.88;
 
   // --- holographic material ------------------------------------------------
   float lum = luma(base);
 
   // Interference fringes: thin spectral bands riding the luminance relief.
   float fringePhase = lum * 9.0 + uv.y * 26.0 - uTime * 0.7 + fbm(vec3(uv * 3.0, uTime * 0.1), 3) * 2.0;
-  vec3 fringe = spectrum(fringePhase * 0.25) * 0.075 * (0.25 + lum);
+  vec3 fringe = spectrum(fringePhase * 0.25) * 0.105 * (0.25 + lum);
 
   // Scanlines locked to the slab, not the screen, so they move with it in 3D.
   float scan = 0.5 + 0.5 * sin(uv.y * 460.0 - uTime * 9.0);
@@ -174,13 +178,16 @@ void main() {
   float roll = exp(-pow(fract(uv.y + uTime * 0.13) - 0.5, 2.0) * 40.0);
 
   vec3 col = base * scanMask;
-  col = mix(col, col * uTint * 1.15, 0.62) + uTint * lum * 0.10;
+  // Push hard toward the channel's own hue: a hologram is monochromatic
+  // light, and a feed that keeps its natural colour reads as a TV set into
+  // the wall rather than a projection standing in the room.
+  col = mix(col, col * uTint * 1.30, 0.78) + uTint * lum * 0.20;
   col += fringe;
-  col += uTint * roll * 0.055;
+  col += uTint * roll * 0.075;
 
   // Fresnel rim: the slab glows where it is seen edge-on.
   float fresnel = pow(1.0 - clamp(abs(vTangentView.z), 0.0, 1.0), 2.5);
-  col += uTint * fresnel * (0.22 + 0.34 * uFocus);
+  col += uTint * fresnel * (0.32 + 0.45 * uFocus);
 
   // --- frame, brackets and status ------------------------------------------
   vec2 half_ = vec2(0.5);
@@ -189,8 +196,8 @@ void main() {
   float bracket = aaStroke(sdBrackets(centered, half_ - 0.010, mix(0.10, 0.34, uFocus), 0.0), 0.0035);
 
   vec3 accent = mix(uTint, HOLO_MINT, uFocus * 0.5);
-  col += accent * edgeLine * (0.40 + 0.40 * uFocus);
-  col += accent * bracket * 1.15;
+  col += accent * edgeLine * (0.60 + 0.55 * uFocus);
+  col += accent * bracket * 1.55;
 
   // Recording tally: a pulsing band along the top edge.
   float tally = smoothstep(0.487, 0.5, abs(centered.y)) * step(0.0, centered.y);
@@ -215,8 +222,9 @@ void main() {
 
   float alpha = solid * (0.90 + 0.10 * uFocus);
   alpha = max(alpha, burn * 0.9);
-  // Never fully opaque: light passes through a hologram.
-  alpha *= 0.94;
+  // Never fully opaque: light passes through a hologram. A console plate
+  // comes closer, because it has to hold small type.
+  alpha *= mix(0.94, 0.995, uPlate);
 
   if (alpha < 0.004) discard;
   fragColor = vec4(col * alpha, alpha);
@@ -227,6 +235,8 @@ export interface PanelInit {
   id: string;
   video?: HTMLVideoElement;
   tint?: [number, number, number];
+  /** A console surface: denser body, so small type stays legible on it. */
+  plate?: boolean;
 }
 
 /**
@@ -260,6 +270,8 @@ export class Panel {
   private vx = 0; private vy = 0; private vz = 0;
 
   tint: [number, number, number];
+  /** Marks a surface that carries UI rather than a camera feed. */
+  plate = false;
   videoAspect = 16 / 9;
   hasFrame = false;
   readonly model: Mat4 = mat4();
@@ -268,6 +280,7 @@ export class Panel {
     this.id = init.id;
     this.video = init.video ?? null;
     this.tint = init.tint ?? [0.25, 0.9, 1.0];
+    this.plate = init.plate ?? false;
   }
 
   /** Underdamped spring on position, damped exponential on everything else. */
@@ -379,7 +392,10 @@ export class PanelPass {
     // the burning dissolve edge stays additive-bright without haloing.
     gl.blendFunc(gl.ONE, gl.ONE_MINUS_SRC_ALPHA);
     gl.enable(gl.DEPTH_TEST);
-    gl.depthMask(false);
+    // Slabs do write depth: they are sorted back to front, so blending is
+    // still correct, and the depth they leave behind is what lets the dust
+    // pass in front of a plate without washing over it.
+    gl.depthMask(true);
 
     for (const panel of sorted) {
       this.uploadVideo(panel);
@@ -392,6 +408,7 @@ export class PanelPass {
       p.f('uGlitch', panel.glitch);
       p.f('uRecording', panel.recording);
       p.f('uSignal', panel.hasFrame ? 1 : 0);
+      p.f('uPlate', panel.plate ? 1 : 0);
       p.f('uAspectFix', panel.videoAspect / slabAspect);
       p.f('uRelief', 0.045);
       p.v3('uTint', panel.tint[0], panel.tint[1], panel.tint[2]);

@@ -181,8 +181,14 @@ function buildSlabChrome(deviceName: string): SlabChrome {
 // Layout — where the slabs live in the room
 // ---------------------------------------------------------------------------
 
-function stageBounds() {
-  const { halfWidth, halfHeight } = stage.camera.visibleHalfSize(0);
+/**
+ * The working volume, measured on whichever depth plane the caller cares
+ * about. Sizing anything from the z = 0 plane and then placing it nearer the
+ * camera is how a panel ends up half off the screen — the frustum is a
+ * pyramid, not a box.
+ */
+function stageBounds(z = 0) {
+  const { halfWidth, halfHeight } = stage.camera.visibleHalfSize(z);
   const railPx = 336;
   const railFraction = clamp(railPx / Math.max(1, window.innerWidth), 0, 0.6);
   // Offset the working volume to the right of the rail and leave headroom
@@ -272,9 +278,9 @@ function relayout() {
       // turns to face the viewer, which is both prettier and easier to read
       // than a flat wall seen off-axis.
       const offset = x - bounds.centerX;
-      panel.tz = -Math.abs(offset) * 0.16 - Math.abs(y) * 0.05;
-      panel.tRotY = -offset * 0.035;
-      panel.tRotX = y * 0.035;
+      panel.tz = -Math.abs(offset) * 0.22 - Math.abs(y) * 0.07;
+      panel.tRotY = -offset * 0.055;
+      panel.tRotX = y * 0.05;
       panel.tRotZ = 0;
     } else {
       panel.tz = 0;
@@ -795,19 +801,33 @@ let settingsConsole: SettingsConsole | null = null;
 function openSettingsConsole(deviceId: string, deviceName: string) {
   closeSettingsConsole();
 
-  const panel = stage.addPanel({ id: `settings:${deviceId}`, tint: [0.55, 0.42, 1.0] });
-  const bounds = stageBounds();
-  const width = Math.min(bounds.halfW * 1.35, 11);
+  const panel = stage.addPanel({ id: `settings:${deviceId}`, tint: [0.55, 0.42, 1.0], plate: true });
+  const CONSOLE_Z = 2.6;
+  const CONSOLE_RATIO = 0.62;
+  const bounds = stageBounds(CONSOLE_Z);
+  // Fit inside the plane it actually sits on, in both axes.
+  const width = Math.min(bounds.halfW * 1.9, (bounds.halfH * 1.9) / CONSOLE_RATIO);
+  const vis = stage.camera.visibleHalfSize(CONSOLE_Z);
+  // And keep it fully on screen even once it has been nudged clear of the rail.
+  const centerX = clamp(bounds.centerX, -(vis.halfWidth - width / 2), vis.halfWidth - width / 2);
+
   panel.tWidth = width;
-  panel.tHeight = width * 0.62;
-  panel.x = bounds.centerX;
-  panel.y = -2.2;
-  panel.z = 3.0;
-  panel.tx = bounds.centerX;
-  panel.ty = 0.4;
-  panel.tz = 5.2;
+  panel.tHeight = width * CONSOLE_RATIO;
+  panel.x = centerX;
+  panel.y = -2.4;
+  panel.z = 0.5;
+  panel.tx = centerX;
+  panel.ty = 0.3;
+  panel.tz = CONSOLE_Z;
   panel.tFocus = 1;
   panel.tMaterialize = 1;
+
+  // The console takes the stage: every live channel steps back and dims,
+  // so the thing being edited is unambiguously the thing in front.
+  for (const session of sessions.values()) {
+    session.panel.tz -= 3.4;
+    session.panel.tFocus = 0;
+  }
 
   const root = document.createElement('div');
   root.className = 'console';
@@ -937,6 +957,8 @@ function closeSettingsConsole() {
   const current = settingsConsole;
   if (!current) return;
   settingsConsole = null;
+  // Bring the channels back to where the layout wants them.
+  relayout();
   current.panel.tMaterialize = 0;
   current.panel.tz = 2.0;
   current.panel.glitch = 0.7;
@@ -987,8 +1009,11 @@ stage.onFrame((dt, time) => {
     // Fade the chrome out as the slab shrinks: unreadable text on a distant
     // plate is noise, and the slab itself still carries the picture.
     const legibility = clamp((q.area / (w * h)) * 14, 0, 1);
-    root.style.opacity = String(clamp(session.panel.materialize * legibility * 1.4, 0, 1));
-    root.style.pointerEvents = legibility > 0.35 ? 'auto' : 'none';
+    // A console in front owns the stage: everything behind it steps down so
+    // its own small type has nothing competing with it.
+    const recessed = settingsConsole ? 0.18 : 1;
+    root.style.opacity = String(clamp(session.panel.materialize * legibility * 1.4 * recessed, 0, 1));
+    root.style.pointerEvents = legibility > 0.35 && !settingsConsole ? 'auto' : 'none';
 
     if (session.recorder) {
       session.chrome.clock.textContent = formatClock(performance.now() - session.recordingStartedAt);
