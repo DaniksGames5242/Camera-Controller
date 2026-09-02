@@ -1,12 +1,15 @@
 <resources>
-    <color name="bg">#04070A</color>
+    <color name="bg">#02040A</color>
     <color name="bg_elevated">#0A1620</color>
     <color name="cyan">#35E6FF</color>
     <color name="cyan_dim">#5935E6FF</color>
     <color name="cyan_faint">#1F35E6FF</color>
+    <color name="mint">#48FFC0</color>
+    <color name="violet">#8B6BFF</color>
     <color name="magenta">#FF3FA4</color>
-    <color name="green">#48FFB0</color>
+    <color name="amber">#FFB23F</color>
     <color name="red">#FF4D5E</color>
-    <color name="text">#D6F2FF</color>
-    <color name="text_dim">#6F93A6</color>
+    <color name="ink">#DCF5FF</color>
+    <color name="ink_dim">#7FA5B8</color>
+    <color name="ink_faint">#4D7F94</color>
 </resources>

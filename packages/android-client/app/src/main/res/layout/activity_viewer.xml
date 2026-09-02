@@ -9,43 +9,55 @@
         android:layout_width="match_parent"
         android:layout_height="match_parent" />
 
-    <!-- HUD channel label, mirrors the desktop client's tile label -->
+    <!-- Holographic frame: brackets, title, status, tally, scan sweep. -->
+    <com.mycamerascontroller.client.holo.HoloViewerFrame
+        android:id="@+id/hud"
+        android:layout_width="match_parent"
+        android:layout_height="match_parent" />
+
+    <com.mycamerascontroller.client.holo.HoloToastHost
+        android:id="@+id/toasts"
+        android:layout_width="match_parent"
+        android:layout_height="match_parent" />
+
+    <!-- A hint that fades once the viewer sees the first swipe or ignores it. -->
     <TextView
-        android:id="@+id/channelLabel"
+        android:id="@+id/swipeHint"
         android:layout_width="wrap_content"
         android:layout_height="wrap_content"
-        android:layout_gravity="top|start"
-        android:layout_margin="16dp"
-        android:background="#B8030A0E"
+        android:layout_gravity="top|center_horizontal"
+        android:layout_marginTop="14dp"
+        android:alpha="0.55"
         android:fontFamily="monospace"
-        android:letterSpacing="0.12"
-        android:paddingStart="10dp"
-        android:paddingEnd="10dp"
-        android:paddingTop="5dp"
-        android:paddingBottom="5dp"
-        android:textAllCaps="true"
-        android:textColor="@color/cyan"
-        android:textSize="11sp" />
+        android:letterSpacing="0.18"
+        android:text="@string/swipe_down_to_close"
+        android:textColor="@color/ink_faint"
+        android:textSize="9sp" />
 
     <LinearLayout
-        android:layout_width="wrap_content"
+        android:layout_width="match_parent"
         android:layout_height="wrap_content"
-        android:layout_gravity="top|end"
-        android:layout_margin="16dp"
-        android:orientation="horizontal">
+        android:layout_gravity="bottom"
+        android:orientation="horizontal"
+        android:paddingStart="18dp"
+        android:paddingEnd="18dp"
+        android:paddingBottom="18dp">
 
-        <Button
+        <com.mycamerascontroller.client.holo.HoloButtonView
             android:id="@+id/micButton"
-            android:layout_width="wrap_content"
+            android:layout_width="0dp"
             android:layout_height="wrap_content"
-            android:layout_marginEnd="8dp"
-            android:text="@string/enable_mic" />
+            android:layout_weight="1" />
 
-        <Button
+        <View
+            android:layout_width="10dp"
+            android:layout_height="1dp" />
+
+        <com.mycamerascontroller.client.holo.HoloButtonView
             android:id="@+id/closeButton"
-            android:layout_width="wrap_content"
+            android:layout_width="0dp"
             android:layout_height="wrap_content"
-            android:text="@string/close" />
+            android:layout_weight="1" />
 
     </LinearLayout>
 

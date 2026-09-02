@@ -1,35 +1,67 @@
 package com.mycamerascontroller.client
 
+import android.annotation.SuppressLint
 import android.os.Bundle
-import android.widget.Button
+import android.view.GestureDetector
+import android.view.MotionEvent
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.appcompat.app.AppCompatActivity
 import androidx.core.content.ContextCompat
+import androidx.core.view.GestureDetectorCompat
+import androidx.core.view.WindowCompat
 import com.google.firebase.database.ChildEventListener
 import com.google.firebase.database.ValueEventListener
+import com.mycamerascontroller.client.holo.Haptics
+import com.mycamerascontroller.client.holo.HoloButtonView
+import com.mycamerascontroller.client.holo.HoloTicker
+import com.mycamerascontroller.client.holo.HoloToastHost
+import com.mycamerascontroller.client.holo.HoloViewerFrame
+import com.mycamerascontroller.client.holo.Holo
 import org.webrtc.*
+import kotlin.math.roundToInt
 
+/**
+ * A single channel, full screen.
+ *
+ * The WebRTC plumbing is unchanged from the plain-Material version — the
+ * signalling handshake, trickle ICE, the sendrecv audio transceiver kept open
+ * for a lazily-attached mic track — only the chrome around the video is new.
+ *
+ * The Android-specific interaction here is the swipe: closing a channel is a
+ * downward drag on the video itself, released past a threshold and *thrown*
+ * rather than tapped, exactly how a physical panel would be pulled down and
+ * out of the way. A tap on the frame is reserved for nothing destructive.
+ */
 class ViewerActivity : AppCompatActivity() {
 
     companion object {
         const val EXTRA_DEVICE_ID = "device_id"
         const val EXTRA_DEVICE_NAME = "device_name"
+        const val EXTRA_TINT = "tint"
     }
 
     private lateinit var eglBase: EglBase
     private lateinit var remoteView: SurfaceViewRenderer
+    private lateinit var hud: HoloViewerFrame
+    private lateinit var toasts: HoloToastHost
+    private lateinit var micButton: HoloButtonView
+    private lateinit var closeButton: HoloButtonView
+    private lateinit var gestureDetector: GestureDetectorCompat
+
     private var peerConnectionFactory: PeerConnectionFactory? = null
     private var peerConnection: PeerConnection? = null
     private var audioTransceiver: RtpTransceiver? = null
     private var micSource: AudioSource? = null
     private var micTrack: AudioTrack? = null
-    private lateinit var micButton: Button
+    private var connectedAtNanos: Long = 0L
+    private var closing = false
 
     private val micPermissionLauncher = registerForActivityResult(
         ActivityResultContracts.RequestPermission()
-    ) { granted -> if (granted) startMic() }
+    ) { granted -> if (granted) startMic() else toasts.push(getString(R.string.toast_mic_error), HoloToastHost.Tone.ERROR) }
 
     private lateinit var deviceId: String
+    private lateinit var deviceName: String
     private var callId: String? = null
     private var answerListener: ValueEventListener? = null
     private var iceListener: ChildEventListener? = null
@@ -42,23 +74,49 @@ class ViewerActivity : AppCompatActivity() {
             .setUsername("openrelayproject").setPassword("openrelayproject").createIceServer(),
     )
 
+    @SuppressLint("ClickableViewAccessibility")
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        WindowCompat.setDecorFitsSystemWindows(window, false)
         setContentView(R.layout.activity_viewer)
 
         deviceId = intent.getStringExtra(EXTRA_DEVICE_ID) ?: run { finish(); return }
-        val deviceName = intent.getStringExtra(EXTRA_DEVICE_NAME)
+        deviceName = intent.getStringExtra(EXTRA_DEVICE_NAME) ?: ""
+        val tint = intent.getIntExtra(EXTRA_TINT, Holo.CYAN)
         title = deviceName
-        findViewById<android.widget.TextView>(R.id.channelLabel).text = deviceName
+
+        hud = findViewById(R.id.hud)
+        hud.deviceName = deviceName
+        hud.accent = tint
+        toasts = findViewById(R.id.toasts)
 
         eglBase = EglBase.create()
         remoteView = findViewById(R.id.remoteView)
-        remoteView.init(eglBase.eglBaseContext, null)
+        remoteView.init(eglBase.eglBaseContext, object : RendererCommon.RendererEvents {
+            override fun onFirstFrameRendered() {}
+            override fun onFrameResolutionChanged(videoWidth: Int, videoHeight: Int, rotation: Int) {
+                runOnUiThread { hud.resolutionLabel = "${videoWidth}×${videoHeight}" }
+            }
+        })
         remoteView.setEnableHardwareScaler(true)
 
-        findViewById<Button>(R.id.closeButton).setOnClickListener { finish() }
+        closeButton = findViewById(R.id.closeButton)
+        closeButton.label = getString(R.string.close)
+        closeButton.glyph = "✕"
+        closeButton.accent = Holo.INK_DIM
+        closeButton.onActivate = { closeWithMotion() }
+
         micButton = findViewById(R.id.micButton)
-        micButton.setOnClickListener { onMicButtonClicked() }
+        micButton.label = getString(R.string.enable_mic)
+        micButton.glyph = "🎤"
+        micButton.accent = tint
+        micButton.onActivate = { onMicButtonClicked() }
+
+        setUpSwipeToClose()
+
+        HoloTicker.add { _, _ ->
+            hud.elapsedLabel = if (connectedAtNanos == 0L) "—" else formatElapsed(System.nanoTime() - connectedAtNanos)
+        }
 
         PeerConnectionFactory.initialize(
             PeerConnectionFactory.InitializationOptions.builder(this).createInitializationOptions()
@@ -69,6 +127,57 @@ class ViewerActivity : AppCompatActivity() {
             .createPeerConnectionFactory()
 
         Signaling.init { startCall() }
+    }
+
+    private fun setUpSwipeToClose() {
+        val threshold = resources.displayMetrics.heightPixels * 0.16f
+        var startY = 0f
+        var dragging = false
+
+        gestureDetector = GestureDetectorCompat(this, object : GestureDetector.SimpleOnGestureListener() {
+            override fun onFling(e1: MotionEvent?, e2: MotionEvent, vx: Float, vy: Float): Boolean {
+                if (vy > 1800f && (e2.y - (e1?.y ?: e2.y)) > 0) { closeWithMotion(); return true }
+                return false
+            }
+        })
+
+        remoteView.setOnTouchListener { v, event ->
+            gestureDetector.onTouchEvent(event)
+            when (event.actionMasked) {
+                MotionEvent.ACTION_DOWN -> { startY = event.y; dragging = true }
+                MotionEvent.ACTION_MOVE -> if (dragging) {
+                    val dy = (event.y - startY).coerceAtLeast(0f)
+                    v.translationY = dy * 0.6f
+                    v.scaleX = 1f - dy / (threshold * 6f)
+                    v.scaleY = v.scaleX
+                    hud.alpha = (1f - dy / threshold).coerceIn(0f, 1f)
+                    if (dy > threshold * 0.7f) Haptics.dragTick(v, 0.3f)
+                }
+                MotionEvent.ACTION_UP, MotionEvent.ACTION_CANCEL -> {
+                    dragging = false
+                    val dy = event.y - startY
+                    if (dy > threshold) closeWithMotion()
+                    else { v.animate().translationY(0f).scaleX(1f).scaleY(1f).setDuration(220).start(); hud.alpha = 1f }
+                }
+            }
+            true
+        }
+    }
+
+    private fun closeWithMotion() {
+        if (closing) return
+        closing = true
+        Haptics.tick(remoteView)
+        remoteView.animate().translationY(remoteView.height * 0.5f).alpha(0f).setDuration(220)
+            .withEndAction { finish(); overridePendingTransition(android.R.anim.fade_in, android.R.anim.fade_out) }
+            .start()
+    }
+
+    private fun formatElapsed(nanos: Long): String {
+        val totalSeconds = (nanos / 1_000_000_000L).coerceAtLeast(0)
+        val m = totalSeconds / 60
+        val s = totalSeconds % 60
+        return "%02d:%02d".format(m, s)
     }
 
     private fun startCall() {
@@ -91,9 +200,23 @@ class ViewerActivity : AppCompatActivity() {
                 }
             }
             override fun onConnectionChange(newState: PeerConnection.PeerConnectionState) {
-                if (newState == PeerConnection.PeerConnectionState.FAILED ||
-                    newState == PeerConnection.PeerConnectionState.CLOSED
-                ) runOnUiThread { finish() }
+                runOnUiThread {
+                    when (newState) {
+                        PeerConnection.PeerConnectionState.CONNECTED -> {
+                            hud.connected = true
+                            connectedAtNanos = System.nanoTime()
+                            Haptics.materialise(remoteView)
+                        }
+                        PeerConnection.PeerConnectionState.FAILED,
+                        PeerConnection.PeerConnectionState.CLOSED -> {
+                            if (!closing) {
+                                toasts.push(getString(R.string.toast_channel_closed, deviceName), HoloToastHost.Tone.ERROR)
+                                finish()
+                            }
+                        }
+                        else -> Unit
+                    }
+                }
             }
             override fun onIceCandidatesRemoved(candidates: Array<out IceCandidate>) {}
             override fun onSignalingChange(state: PeerConnection.SignalingState?) {}
@@ -169,8 +292,10 @@ class ViewerActivity : AppCompatActivity() {
             }
             return
         }
-        track.setEnabled(!track.enabled())
-        micButton.setText(if (track.enabled()) R.string.disable_mic else R.string.enable_mic)
+        val enabled = !track.enabled()
+        track.setEnabled(enabled)
+        micButton.label = getString(if (enabled) R.string.disable_mic else R.string.enable_mic)
+        micButton.engaged = enabled
     }
 
     private fun startMic() {
@@ -181,7 +306,8 @@ class ViewerActivity : AppCompatActivity() {
         micSource = source
         micTrack = track
         transceiver.sender.setTrack(track, false)
-        micButton.setText(R.string.disable_mic)
+        micButton.label = getString(R.string.disable_mic)
+        micButton.engaged = true
     }
 
     override fun onDestroy() {

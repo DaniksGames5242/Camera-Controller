@@ -1,33 +1,25 @@
 <resources xmlns:tools="http://schemas.android.com/tools">
     <style name="Theme.MyCamerasControllerClient" parent="Theme.MaterialComponents.NoActionBar">
-        <item name="android:windowBackground">@drawable/bg_app</item>
+        <item name="android:windowBackground">@color/bg</item>
         <item name="colorPrimary">@color/cyan</item>
         <item name="colorAccent">@color/cyan</item>
-        <item name="colorSecondary">@color/green</item>
-        <item name="android:textColor">@color/text</item>
-        <item name="android:textColorPrimary">@color/text</item>
-        <item name="android:textColorSecondary">@color/text_dim</item>
-        <item name="android:textColorHint">@color/text_dim</item>
+        <item name="colorSecondary">@color/mint</item>
+        <item name="android:textColor">@color/ink</item>
+        <item name="android:textColorPrimary">@color/ink</item>
+        <item name="android:textColorSecondary">@color/ink_dim</item>
+        <item name="android:textColorHint">@color/ink_dim</item>
         <item name="android:fontFamily">monospace</item>
-        <item name="android:statusBarColor">@color/bg</item>
-        <item name="android:navigationBarColor">@color/bg</item>
-        <item name="materialAlertDialogTheme">@style/Theme.Mcc.Dialog</item>
-        <item name="buttonStyle">@style/Widget.Mcc.Button</item>
+        <item name="android:statusBarColor">@android:color/transparent</item>
+        <item name="android:navigationBarColor">@android:color/transparent</item>
+        <item name="android:windowLightStatusBar">false</item>
+        <item name="android:windowLightNavigationBar" tools:targetApi="o_mr1">false</item>
+        <item name="android:windowAnimationStyle">@style/Holo.WindowAnimation</item>
     </style>
 
-    <style name="Widget.Mcc.Button" parent="Widget.AppCompat.Button.Borderless">
-        <item name="android:background">@drawable/bg_neon_button</item>
-        <item name="android:textColor">@color/cyan</item>
-        <item name="android:fontFamily">monospace</item>
-        <item name="android:letterSpacing">0.06</item>
-        <item name="android:textSize">12sp</item>
-        <item name="android:paddingStart">14dp</item>
-        <item name="android:paddingEnd">14dp</item>
-    </style>
-
-    <style name="Theme.Mcc.Dialog" parent="ThemeOverlay.MaterialComponents.MaterialAlertDialog">
-        <item name="android:background">@color/bg_elevated</item>
-        <item name="android:textColor">@color/text</item>
-        <item name="colorAccent">@color/cyan</item>
+    <style name="Holo.WindowAnimation" parent="android:Animation.Activity">
+        <item name="android:activityOpenEnterAnimation">@android:anim/fade_in</item>
+        <item name="android:activityOpenExitAnimation">@android:anim/fade_out</item>
+        <item name="android:activityCloseEnterAnimation">@android:anim/fade_in</item>
+        <item name="android:activityCloseExitAnimation">@android:anim/fade_out</item>
     </style>
 </resources>

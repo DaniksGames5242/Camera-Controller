@@ -1,54 +1,102 @@
 package com.mycamerascontroller.client
 
-import android.view.LayoutInflater
-import android.view.View
 import android.view.ViewGroup
-import android.widget.ImageButton
-import android.widget.TextView
+import androidx.recyclerview.widget.DiffUtil
 import androidx.recyclerview.widget.RecyclerView
+import com.mycamerascontroller.client.holo.Holo
+import com.mycamerascontroller.client.holo.HoloNodeView
+import com.mycamerascontroller.client.holo.dp
 
+/**
+ * The node list.
+ *
+ * Rows are [HoloNodeView]s — single custom views that draw themselves — so
+ * there is no item layout to inflate and every card animates continuously
+ * without the adapter being involved. Diffing rather than
+ * notifyDataSetChanged keeps a card's springs and phase intact when its
+ * status changes underneath it; rebuilding the row would reset the entrance
+ * animation on every heartbeat from the agent.
+ */
 class DeviceAdapter(
-    private val onClick: (DeviceWithId) -> Unit,
-    private val onLongClick: (DeviceWithId) -> Unit,
-    private val onSettingsClick: (DeviceWithId) -> Unit,
+    private val onActivate: (DeviceWithId) -> Unit,
+    private val onLongPress: (DeviceWithId, Float, Float) -> Unit,
+    private val onSettings: (DeviceWithId) -> Unit,
+    private val onTouchPoint: (Float, Float) -> Unit,
 ) : RecyclerView.Adapter<DeviceAdapter.ViewHolder>() {
 
     private var devices: List<DeviceWithId> = emptyList()
+    /** Device ids with a viewer currently open, so the card can say so. */
+    var openChannels: Set<String> = emptySet()
+        set(value) { field = value; notifyItemRangeChanged(0, itemCount, PAYLOAD_STATE) }
+
+    class ViewHolder(val node: HoloNodeView) : RecyclerView.ViewHolder(node)
 
     fun submit(list: List<DeviceWithId>) {
-        devices = list.sortedBy { it.record.name }
-        notifyDataSetChanged()
+        val next = list.sortedBy { it.record.name }
+        val diff = DiffUtil.calculateDiff(object : DiffUtil.Callback() {
+            override fun getOldListSize() = devices.size
+            override fun getNewListSize() = next.size
+            override fun areItemsTheSame(o: Int, n: Int) = devices[o].id == next[n].id
+            override fun areContentsTheSame(o: Int, n: Int) = devices[o] == next[n]
+        })
+        devices = next
+        diff.dispatchUpdatesTo(this)
     }
 
-    class ViewHolder(view: View) : RecyclerView.ViewHolder(view) {
-        val dot: View = view.findViewById(R.id.statusDot)
-        val name: TextView = view.findViewById(R.id.deviceName)
-        val status: TextView = view.findViewById(R.id.deviceStatus)
-        val settingsButton: ImageButton = view.findViewById(R.id.settingsButton)
-    }
+    fun deviceAt(position: Int): DeviceWithId? = devices.getOrNull(position)
 
     override fun onCreateViewHolder(parent: ViewGroup, viewType: Int): ViewHolder {
-        val view = LayoutInflater.from(parent.context).inflate(R.layout.item_device, parent, false)
-        return ViewHolder(view)
+        val node = HoloNodeView(parent.context).apply {
+            layoutParams = RecyclerView.LayoutParams(
+                ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT
+            ).apply {
+                val m = parent.context.dp(5f).toInt()
+                setMargins(0, m, 0, m)
+            }
+        }
+        return ViewHolder(node)
     }
 
     override fun getItemCount() = devices.size
 
+    override fun onBindViewHolder(holder: ViewHolder, position: Int, payloads: MutableList<Any>) {
+        if (payloads.contains(PAYLOAD_STATE)) {
+            // Status-only refresh: leave the card's own animation state alone.
+            bindState(holder, devices[position])
+            return
+        }
+        onBindViewHolder(holder, position)
+    }
+
     override fun onBindViewHolder(holder: ViewHolder, position: Int) {
         val device = devices[position]
-        val online = device.record.status == "online"
-        holder.name.text = device.record.name
-        holder.status.text = holder.itemView.context.getString(
-            if (online) R.string.status_online else R.string.status_offline
-        )
-        holder.dot.setBackgroundResource(if (online) R.drawable.dot_online else R.drawable.dot_offline)
-        holder.itemView.alpha = if (online) 1f else 0.5f
-        holder.itemView.setOnClickListener { if (online) onClick(device) }
-        // Long-press to forget a device — mainly useful for offline
-        // leftovers (e.g. a reinstalled agent, which registers under a new
-        // record if this one is never cleaned up), but allowed for any
-        // device since a stale "online" entry can also happen.
-        holder.itemView.setOnLongClickListener { onLongClick(device); true }
-        holder.settingsButton.setOnClickListener { onSettingsClick(device) }
+        val node = holder.node
+        node.title = device.record.name
+        node.tint = Holo.tintFor(device.id)
+        bindState(holder, device)
+
+        node.onTouchPoint = { x, y -> onTouchPoint(x, y) }
+        node.onActivate = activate@{
+            val current = holder.bindingAdapterPosition.takeIf { it >= 0 }?.let { devices.getOrNull(it) } ?: return@activate
+            if (current.record.status == "online" || openChannels.contains(current.id)) onActivate(current)
+            else node.reject()
+        }
+        node.onLongPressAt = longPress@{ x, y ->
+            val current = holder.bindingAdapterPosition.takeIf { it >= 0 }?.let { devices.getOrNull(it) } ?: return@longPress
+            onLongPress(current, x, y)
+        }
+        node.onSettings = settings@{
+            val current = holder.bindingAdapterPosition.takeIf { it >= 0 }?.let { devices.getOrNull(it) } ?: return@settings
+            onSettings(current)
+        }
+    }
+
+    private fun bindState(holder: ViewHolder, device: DeviceWithId) {
+        holder.node.online = device.record.status == "online"
+        holder.node.channelOpen = openChannels.contains(device.id)
+    }
+
+    private companion object {
+        const val PAYLOAD_STATE = "state"
     }
 }
