@@ -1,0 +1,7 @@
+package com.mycamerascontroller.client
+
+// Скопировать в RoomConfig.kt (тот же каталог) и подставить тот же roomId,
+// что и во всех агентах / firebase.config.json. RoomConfig.kt в .gitignore.
+object RoomConfig {
+    const val ROOM_ID = "REPLACE_WITH_THE_SAME_ROOM_ID_AS_FIREBASE_CONFIG_JSON"
+}

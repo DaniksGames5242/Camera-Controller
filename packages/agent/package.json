@@ -1,0 +1,21 @@
+{
+  "name": "@mcc/agent",
+  "private": true,
+  "version": "0.1.0",
+  "description": "MyCamerasController background camera/mic agent",
+  "author": "MyCamerasController",
+  "main": "dist/main.js",
+  "scripts": {
+    "build": "node build.mjs",
+    "typecheck": "tsc --noEmit",
+    "dev": "node build.mjs && electron .",
+    "dist:win": "node build.mjs && electron-builder --win portable",
+    "dist:linux": "node build.mjs && electron-builder --linux AppImage"
+  },
+  "devDependencies": {
+    "@mcc/shared": "*",
+    "electron": "^32.1.0",
+    "electron-builder": "^25.1.0",
+    "esbuild": "^0.23.1"
+  }
+}

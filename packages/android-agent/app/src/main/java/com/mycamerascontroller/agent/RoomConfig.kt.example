@@ -1,0 +1,9 @@
+package com.mycamerascontroller.agent
+
+// Скопировать в RoomConfig.kt (тот же каталог) и подставить тот же roomId,
+// что и в packages/shared/src/firebase.config.json — так это устройство
+// окажется в той же приватной "комнате", что и остальные.
+// RoomConfig.kt в .gitignore, сюда секрет не попадёт.
+object RoomConfig {
+    const val ROOM_ID = "REPLACE_WITH_THE_SAME_ROOM_ID_AS_FIREBASE_CONFIG_JSON"
+}

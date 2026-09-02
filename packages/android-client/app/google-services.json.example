@@ -1,0 +1,5 @@
+{
+  "_comment": "Скачивается из Firebase console: Project settings > Your apps > Add app > Android с applicationId com.mycamerascontroller.client > google-services.json. Переименовать в google-services.json (без .example) и положить рядом. Файл в .gitignore.",
+  "project_info": {},
+  "client": []
+}

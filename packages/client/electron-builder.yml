@@ -1,0 +1,21 @@
+appId: com.mycamerascontroller.client
+productName: MyCamerasController
+electronVersion: 32.3.3
+directories:
+  output: release
+  # dist/ carries its own minimal, dependency-free package.json (written by
+  # build.mjs) — electron-builder packages from there, not from this
+  # workspace package's own package.json. See build.mjs for why.
+  app: dist
+
+# Viewer app only ships for Windows/Android — a normal admin installer is
+# fine here (unlike the agent, this isn't distributed to be "invisible").
+win:
+  target:
+    - target: nsis
+      arch: [x64]
+
+nsis:
+  oneClick: false
+  allowToChangeInstallationDirectory: true
+  perMachine: true

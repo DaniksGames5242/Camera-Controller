@@ -1,0 +1,7 @@
+<resources>
+    <string name="app_name">MyCamerasController</string>
+    <string name="no_devices">Устройства не найдены</string>
+    <string name="close">Закрыть</string>
+    <string name="status_online">в сети</string>
+    <string name="status_offline">не в сети</string>
+</resources>

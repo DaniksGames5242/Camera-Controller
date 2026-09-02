@@ -1,0 +1,26 @@
+node_modules/
+dist/
+out/
+release/
+*.log
+.DS_Store
+
+# per-device local config (device name, generated ids)
+config.local.json
+
+# firebase web config — contains project keys, not meant for a public repo
+packages/shared/src/firebase.config.json
+packages/android-agent/app/google-services.json
+packages/android-client/app/google-services.json
+packages/android-agent/app/src/main/java/com/mycamerascontroller/agent/RoomConfig.kt
+packages/android-client/app/src/main/java/com/mycamerascontroller/client/RoomConfig.kt
+
+# Android build output
+packages/android-agent/.gradle/
+packages/android-agent/app/build/
+packages/android-agent/build/
+packages/android-agent/local.properties
+packages/android-client/.gradle/
+packages/android-client/app/build/
+packages/android-client/build/
+packages/android-client/local.properties

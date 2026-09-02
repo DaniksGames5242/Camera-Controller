@@ -1,0 +1,10 @@
+<resources>
+    <string name="app_name">MyCamerasController Agent</string>
+    <string name="status_idle">Ожидание подключений</string>
+    <string name="status_streaming">Идёт просмотр — камера включена</string>
+    <string name="grant_permissions">Разрешить камеру и микрофон</string>
+    <string name="ignore_battery_optimizations">Отключить оптимизацию батареи для этого приложения</string>
+    <string name="notification_channel_name">Статус агента камеры</string>
+    <string name="notification_title_idle">Камера в режиме ожидания</string>
+    <string name="notification_title_streaming">Камера просматривается</string>
+</resources>

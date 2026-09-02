@@ -1,0 +1,11 @@
+{
+  "_comment": "Copy this file to firebase.config.json (same folder) and fill in values from your Firebase project settings > General > Your apps > SDK setup and configuration. firebase.config.json is gitignored — it is baked into your own builds only, never committed.",
+  "apiKey": "",
+  "authDomain": "",
+  "databaseURL": "",
+  "projectId": "",
+  "storageBucket": "",
+  "messagingSenderId": "",
+  "appId": "",
+  "roomId": "REPLACE_WITH_A_LONG_RANDOM_STRING"
+}

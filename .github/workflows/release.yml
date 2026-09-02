@@ -1,0 +1,142 @@
+name: Release
+
+# Builds portable/AppImage/installer artifacts and attaches them to a GitHub
+# Release, so devices can grab them straight from a browser download link —
+# no server of our own involved.
+on:
+  push:
+    tags:
+      - 'v*'
+  workflow_dispatch: {}
+
+jobs:
+  agent-windows:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+      - name: Write firebase config
+        shell: bash
+        run: echo "$FIREBASE_CONFIG_JSON" > packages/shared/src/firebase.config.json
+        env:
+          FIREBASE_CONFIG_JSON: ${{ secrets.FIREBASE_CONFIG_JSON }}
+      - run: npm ci
+      - run: npm run build:agent
+      - run: npm run dist:win -w packages/agent
+      - uses: actions/upload-artifact@v4
+        with:
+          name: agent-windows-portable
+          path: packages/agent/release/*portable*.exe
+
+  agent-linux:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+      - name: Write firebase config
+        run: echo "$FIREBASE_CONFIG_JSON" > packages/shared/src/firebase.config.json
+        env:
+          FIREBASE_CONFIG_JSON: ${{ secrets.FIREBASE_CONFIG_JSON }}
+      - run: npm ci
+      - run: npm run build:agent
+      - run: npm run dist:linux -w packages/agent
+      - uses: actions/upload-artifact@v4
+        with:
+          name: agent-linux-appimage
+          path: packages/agent/release/*.AppImage
+
+  client-windows:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+      - name: Write firebase config
+        shell: bash
+        run: echo "$FIREBASE_CONFIG_JSON" > packages/shared/src/firebase.config.json
+        env:
+          FIREBASE_CONFIG_JSON: ${{ secrets.FIREBASE_CONFIG_JSON }}
+      - run: npm ci
+      - run: npm run build:client
+      - run: npm run dist:win -w packages/client
+      - uses: actions/upload-artifact@v4
+        with:
+          name: client-windows-installer
+          path: packages/client/release/*.exe
+
+  agent-android:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: packages/android-agent
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: 17
+      - name: Write google-services.json
+        run: echo "$GOOGLE_SERVICES_JSON" > app/google-services.json
+        env:
+          GOOGLE_SERVICES_JSON: ${{ secrets.ANDROID_AGENT_GOOGLE_SERVICES_JSON }}
+      - name: Write RoomConfig.kt
+        run: |
+          mkdir -p app/src/main/java/com/mycamerascontroller/agent
+          cat > app/src/main/java/com/mycamerascontroller/agent/RoomConfig.kt <<EOF
+          package com.mycamerascontroller.agent
+          object RoomConfig { const val ROOM_ID = "${{ secrets.ROOM_ID }}" }
+          EOF
+      - uses: gradle/actions/setup-gradle@v4
+      # Debug build: auto-signed with a throwaway per-machine key, which is all a
+      # sideloaded personal-use APK needs — no release keystore to manage/secure.
+      - run: gradle assembleDebug
+      - uses: actions/upload-artifact@v4
+        with:
+          name: agent-android-apk
+          path: packages/android-agent/app/build/outputs/apk/debug/*.apk
+
+  client-android:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: packages/android-client
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: 17
+      - name: Write google-services.json
+        run: echo "$GOOGLE_SERVICES_JSON" > app/google-services.json
+        env:
+          GOOGLE_SERVICES_JSON: ${{ secrets.ANDROID_CLIENT_GOOGLE_SERVICES_JSON }}
+      - name: Write RoomConfig.kt
+        run: |
+          mkdir -p app/src/main/java/com/mycamerascontroller/client
+          cat > app/src/main/java/com/mycamerascontroller/client/RoomConfig.kt <<EOF
+          package com.mycamerascontroller.client
+          object RoomConfig { const val ROOM_ID = "${{ secrets.ROOM_ID }}" }
+          EOF
+      - uses: gradle/actions/setup-gradle@v4
+      - run: gradle assembleDebug
+      - uses: actions/upload-artifact@v4
+        with:
+          name: client-android-apk
+          path: packages/android-client/app/build/outputs/apk/debug/*.apk
+
+  release:
+    if: startsWith(github.ref, 'refs/tags/v')
+    needs: [agent-windows, agent-linux, client-windows, agent-android, client-android]
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          path: artifacts
+      - uses: softprops/action-gh-release@v2
+        with:
+          files: artifacts/**/*
