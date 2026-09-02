@@ -99,10 +99,14 @@ jobs:
       # Debug build: auto-signed with a throwaway per-machine key, which is all a
       # sideloaded personal-use APK needs — no release keystore to manage/secure.
       - run: gradle assembleDebug
+      # Gradle names every debug APK "app-debug.apk" — rename before upload so
+      # this doesn't collide with the client's identically-named APK in the
+      # same release.
+      - run: mv app/build/outputs/apk/debug/app-debug.apk app/build/outputs/apk/debug/mycamerascontroller-agent.apk
       - uses: actions/upload-artifact@v4
         with:
           name: agent-android-apk
-          path: packages/android-agent/app/build/outputs/apk/debug/*.apk
+          path: packages/android-agent/app/build/outputs/apk/debug/mycamerascontroller-agent.apk
 
   client-android:
     runs-on: ubuntu-latest
@@ -128,10 +132,14 @@ jobs:
           EOF
       - uses: gradle/actions/setup-gradle@v4
       - run: gradle assembleDebug
+      # Gradle names every debug APK "app-debug.apk" — rename before upload so
+      # this doesn't collide with the agent's identically-named APK in the
+      # same release.
+      - run: mv app/build/outputs/apk/debug/app-debug.apk app/build/outputs/apk/debug/mycamerascontroller-client.apk
       - uses: actions/upload-artifact@v4
         with:
           name: client-android-apk
-          path: packages/android-client/app/build/outputs/apk/debug/*.apk
+          path: packages/android-client/app/build/outputs/apk/debug/mycamerascontroller-client.apk
 
   release:
     if: startsWith(github.ref, 'refs/tags/v')
