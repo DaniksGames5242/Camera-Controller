@@ -38,7 +38,7 @@ dependencies {
     implementation("androidx.recyclerview:recyclerview:1.3.2")
     implementation("androidx.constraintlayout:constraintlayout:2.1.4")
 
-    implementation("io.github.webrtc-sdk:android:125.6422.07.1")
+    implementation("io.github.webrtc-sdk:android:125.6422.07")
 
     implementation(platform("com.google.firebase:firebase-bom:33.4.0"))
     implementation("com.google.firebase:firebase-database-ktx")
