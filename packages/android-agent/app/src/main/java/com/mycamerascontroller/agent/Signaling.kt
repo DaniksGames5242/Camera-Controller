@@ -31,6 +31,12 @@ data class IceCandidatePayload @JvmOverloads constructor(
     var sdpMLineIndex: Int? = null,
 )
 
+data class DeviceSettings @JvmOverloads constructor(
+    var width: Int? = null,
+    var height: Int? = null,
+    var frameRate: Int? = null,
+)
+
 object Signaling {
     private val db by lazy { FirebaseDatabase.getInstance() }
     private var signedIn = false
@@ -64,6 +70,13 @@ object Signaling {
         roomRef("devices/$deviceId").updateChildren(
             mapOf("status" to "online", "lastSeen" to System.currentTimeMillis())
         )
+    }
+
+    /** One-time read of this device's current capture preferences, e.g. right before starting capture. */
+    fun getDeviceSettings(deviceId: String, cb: (DeviceSettings) -> Unit) {
+        roomRef("deviceSettings/$deviceId").get()
+            .addOnSuccessListener { snap -> cb(snap.getValue(DeviceSettings::class.java) ?: DeviceSettings()) }
+            .addOnFailureListener { cb(DeviceSettings()) }
     }
 
     fun setOffline(deviceId: String) {

@@ -8,12 +8,25 @@
   <body>
     <div id="app">
       <aside id="device-list"></aside>
-      <main id="viewer">
-        <p id="viewer-placeholder">Выберите устройство слева</p>
-        <video id="viewer-video" autoplay playsinline hidden></video>
-        <button id="close-btn" hidden>Закрыть</button>
+      <main id="viewer-grid">
+        <p id="viewer-placeholder">Выберите устройство слева, чтобы начать просмотр — можно открыть сразу несколько.</p>
       </main>
     </div>
+
+    <div id="settings-modal" class="modal-overlay" hidden>
+      <div class="modal">
+        <h3 id="settings-title">Настройки камеры</h3>
+        <label>Ширина (px)<input id="settings-width" type="number" min="0" placeholder="по умолчанию 1280" /></label>
+        <label>Высота (px)<input id="settings-height" type="number" min="0" placeholder="по умолчанию 720" /></label>
+        <label>Частота кадров (fps)<input id="settings-fps" type="number" min="0" placeholder="по умолчанию 30" /></label>
+        <p class="modal-hint">Применяется в момент, когда агент начинает новую трансляцию — на уже открытый просмотр не повлияет.</p>
+        <div class="modal-actions">
+          <button id="settings-cancel">Отмена</button>
+          <button id="settings-save">Сохранить</button>
+        </div>
+      </div>
+    </div>
+
     <script src="app.js"></script>
   </body>
 </html>

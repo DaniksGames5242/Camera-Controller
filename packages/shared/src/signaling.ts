@@ -7,6 +7,7 @@ import {
   update,
   remove,
   push,
+  get,
   onValue,
   onChildAdded,
   onDisconnect,
@@ -20,6 +21,7 @@ import type {
   DeviceWithId,
   SessionDescriptionPayload,
   IceCandidatePayload,
+  DeviceSettings,
 } from './types.js';
 
 let app: FirebaseApp | null = null;
@@ -107,6 +109,27 @@ export function onDeviceRemoved(deviceId: string, cb: () => void): Unsubscribe {
       cb();
     }
   });
+}
+
+// ---------- per-device capture settings (resolution/fps) ----------
+
+function deviceSettingsRef(deviceId: string) {
+  return ref(db!, `rooms/${roomId()}/deviceSettings/${deviceId}`);
+}
+
+/** Client side: sets (or clears, by omitting fields) this device's capture preferences. */
+export function setDeviceSettings(deviceId: string, settings: DeviceSettings) {
+  set(deviceSettingsRef(deviceId), settings);
+}
+
+export function onDeviceSettings(deviceId: string, cb: (settings: DeviceSettings) => void): Unsubscribe {
+  return onValue(deviceSettingsRef(deviceId), (snap) => cb((snap.val() ?? {}) as DeviceSettings));
+}
+
+/** Agent side: one-time read of current settings, e.g. right before starting capture. */
+export async function getDeviceSettings(deviceId: string): Promise<DeviceSettings> {
+  const snap = await get(deviceSettingsRef(deviceId));
+  return (snap.val() ?? {}) as DeviceSettings;
 }
 
 // ---------- calls (one viewing session) ----------

@@ -129,6 +129,12 @@ class CameraAgentService : Service() {
         if (activeCallId != null) return // one viewer at a time
         activeCallId = callId
 
+        Signaling.getDeviceSettings(deviceId) { settings ->
+            startCallWithSettings(callId, offer, settings)
+        }
+    }
+
+    private fun startCallWithSettings(callId: String, offer: SdpPayload, settings: DeviceSettings) {
         val factory = peerConnectionFactory ?: return
 
         // Camera/mic physically turn on here, and only here.
@@ -145,7 +151,7 @@ class CameraAgentService : Service() {
         val vSource = factory.createVideoSource(newCapturer.isScreencast)
         videoSource = vSource
         newCapturer.initialize(helper, this, vSource.capturerObserver)
-        newCapturer.startCapture(1280, 720, 30)
+        newCapturer.startCapture(settings.width ?: 1280, settings.height ?: 720, settings.frameRate ?: 30)
         val videoTrack = factory.createVideoTrack("video0", vSource)
 
         val aSource = factory.createAudioSource(MediaConstraints())

@@ -5,11 +5,13 @@ import {
   onRemoteIceCandidates,
   onCallEnded,
   onDeviceRemoved,
+  getDeviceSettings,
   sendAnswer,
   sendIceCandidate,
   createPeerConnection,
   type IceCandidatePayload,
   type SessionDescriptionPayload,
+  type DeviceSettings,
 } from '@mcc/shared';
 
 declare global {
@@ -39,10 +41,17 @@ async function handleCall(myId: string, callId: string, offer: SessionDescriptio
   }
   activeCallId = callId;
 
+  const settings = await getDeviceSettings(myId).catch((): DeviceSettings => ({}));
+  const videoConstraints: MediaTrackConstraints = {
+    width: { ideal: settings.width ?? 1280 },
+    height: { ideal: settings.height ?? 720 },
+    frameRate: { ideal: settings.frameRate ?? 30 },
+  };
+
   let stream: MediaStream;
   try {
     // The camera/mic physically turn on here, and only here.
-    stream = await navigator.mediaDevices.getUserMedia({ video: true, audio: true });
+    stream = await navigator.mediaDevices.getUserMedia({ video: videoConstraints, audio: true });
   } catch (err) {
     console.error('getUserMedia failed', err);
     log(`getUserMedia FAILED: ${err}`);

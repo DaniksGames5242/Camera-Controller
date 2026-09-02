@@ -32,3 +32,15 @@ export interface CallNode {
   createdAt: number;
   status: 'pending' | 'accepted' | 'ended';
 }
+
+/**
+ * Per-device capture preferences set from a client, read by that device's
+ * own agent before it starts capturing for a new call. Absent fields (or an
+ * absent record entirely) mean "use the agent's own default".
+ * Stored at /rooms/{roomId}/deviceSettings/{deviceId}
+ */
+export interface DeviceSettings {
+  width?: number;
+  height?: number;
+  frameRate?: number;
+}
