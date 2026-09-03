@@ -55,6 +55,7 @@ const statNodes = document.getElementById('stat-nodes') as HTMLElement;
 const statOnline = document.getElementById('stat-online') as HTMLElement;
 const statChannels = document.getElementById('stat-channels') as HTMLElement;
 const dockMeterFill = document.querySelector('#dock-meter .dock-meter-fill') as HTMLElement;
+const dedupeToggle = document.getElementById('dedupe-toggle') as HTMLButtonElement;
 
 /** Hidden host for the <video> elements that feed the slab textures. */
 const videoVault = document.createElement('div');
@@ -77,6 +78,39 @@ let layoutMode: LayoutMode = 'arc';
 let focusedId: string | null = null;
 
 let devices: DeviceWithId[] = [];
+
+// Leftover offline test/duplicate registrations (same name, stale record)
+// clutter the sidebar over time — merge same-named entries down to one row
+// by default, but let it be switched off since it's a display-only
+// convenience, not something that should ever hide a device silently.
+const DEDUPE_STORAGE_KEY = 'mcc-merge-duplicate-names';
+let mergeDuplicateNames = localStorage.getItem(DEDUPE_STORAGE_KEY) !== 'off';
+
+/**
+ * The rows the sidebar actually shows: one per device.id normally, or (when
+ * merging is on) one per distinct name — picking whichever same-named
+ * record is online, falling back to the most recently seen one, so a live
+ * device always wins over its own stale offline duplicates.
+ */
+function visibleDevices(): DeviceWithId[] {
+  if (!mergeDuplicateNames) return devices;
+  const byName = new Map<string, DeviceWithId>();
+  for (const device of devices) {
+    const existing = byName.get(device.name);
+    if (!existing) {
+      byName.set(device.name, device);
+      continue;
+    }
+    const existingOnline = isDeviceOnline(existing);
+    const deviceOnline = isDeviceOnline(device);
+    if (deviceOnline && !existingOnline) {
+      byName.set(device.name, device);
+    } else if (deviceOnline === existingOnline && device.lastSeen > existing.lastSeen) {
+      byName.set(device.name, device);
+    }
+  }
+  return devices.filter((d) => byName.get(d.name) === d);
+}
 
 // ---------------------------------------------------------------------------
 // Sessions
@@ -785,9 +819,10 @@ const rows = new Map<string, DeviceRow>();
 
 function renderList() {
   const seen = new Set<string>();
-  emptyEl.classList.toggle('hidden', devices.length > 0);
+  const shown = visibleDevices();
+  emptyEl.classList.toggle('hidden', shown.length > 0);
 
-  devices.forEach((device, index) => {
+  shown.forEach((device, index) => {
     seen.add(device.id);
     let row = rows.get(device.id);
     if (!row) {
@@ -811,8 +846,8 @@ function renderList() {
     window.setTimeout(() => row.root.remove(), 420);
   }
 
-  const online = devices.filter(isDeviceOnline).length;
-  statNodes.textContent = String(devices.length);
+  const online = shown.filter(isDeviceOnline).length;
+  statNodes.textContent = String(shown.length);
   statOnline.textContent = String(online);
   statChannels.textContent = String(sessions.size);
 }
@@ -1436,6 +1471,21 @@ function refreshCommands() {
 // Boot
 // ---------------------------------------------------------------------------
 
+function wireDedupeToggle() {
+  dedupeToggle.classList.toggle('active', mergeDuplicateNames);
+  dedupeToggle.onclick = () => {
+    mergeDuplicateNames = !mergeDuplicateNames;
+    localStorage.setItem(DEDUPE_STORAGE_KEY, mergeDuplicateNames ? 'on' : 'off');
+    dedupeToggle.classList.toggle('active', mergeDuplicateNames);
+    renderList();
+    toasts.push(
+      mergeDuplicateNames ? 'Дубликаты по имени объединяются' : 'Показаны все записи без объединения',
+      'info', 2200,
+    );
+  };
+  registerMagnet(dedupeToggle, 0.3, dedupeToggle.title);
+}
+
 function wireDock() {
   const scan = document.getElementById('dock-scan') as HTMLButtonElement;
   const layout = document.getElementById('dock-layout') as HTMLButtonElement;
@@ -1459,6 +1509,7 @@ async function main() {
 
   brandMark.innerHTML = 'MYCAMS<span class="brand-slash">//</span>CTRL';
   wireDock();
+  wireDedupeToggle();
   bindStageInput();
   refreshCommands();
 

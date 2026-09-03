@@ -24,6 +24,8 @@
     <string name="cancel">Отмена</string>
     <string name="action_scan">СКАН</string>
     <string name="action_recentre">КАМЕРА</string>
+    <string name="action_dedupe_on">ДУБЛИ: СЛИТЫ</string>
+    <string name="action_dedupe_off">ДУБЛИ: ВСЕ</string>
     <string name="action_open">Открыть</string>
     <string name="action_settings">Параметры</string>
     <string name="toast_scanning">Сканирование сети…</string>

@@ -48,6 +48,13 @@ class MainActivity : AppCompatActivity() {
     private var overscroll = 0f
     private var scanArmed = false
 
+    // Leftover offline test/duplicate registrations (same name, stale
+    // record) clutter the list over time — merge same-named entries down to
+    // one row by default, switchable off since it's a display-only
+    // convenience, never something that should hide a device silently.
+    private lateinit var dedupeButton: HoloButtonView
+    private var mergeDuplicateNames = true
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         // Edge to edge: the room should reach the corners of the display,
@@ -66,6 +73,9 @@ class MainActivity : AppCompatActivity() {
             setImmediate("")
             setDecoded(getString(R.string.brand_mark))
         }
+
+        mergeDuplicateNames = getSharedPreferences("client_settings", MODE_PRIVATE)
+            .getBoolean("merge_duplicate_names", true)
 
         applyInsets()
         setUpDock()
@@ -108,6 +118,21 @@ class MainActivity : AppCompatActivity() {
                 // Re-zero the tilt reference to however the phone is held now.
                 stage.recalibrateTilt()
                 toasts.push(getString(R.string.toast_recentred), HoloToastHost.Tone.OK, 1800)
+            }
+            onTouchPoint = { x, y -> stirAt(x, y) }
+        }
+        dedupeButton = findViewById<HoloButtonView>(R.id.dedupeButton).apply {
+            glyph = "⧉"
+            accent = Holo.MINT
+            engaged = mergeDuplicateNames
+            label = getString(if (mergeDuplicateNames) R.string.action_dedupe_on else R.string.action_dedupe_off)
+            onActivate = {
+                mergeDuplicateNames = !mergeDuplicateNames
+                getSharedPreferences("client_settings", MODE_PRIVATE).edit()
+                    .putBoolean("merge_duplicate_names", mergeDuplicateNames).apply()
+                engaged = mergeDuplicateNames
+                label = getString(if (mergeDuplicateNames) R.string.action_dedupe_on else R.string.action_dedupe_off)
+                onDevices(devices)
             }
             onTouchPoint = { x, y -> stirAt(x, y) }
         }
@@ -178,19 +203,46 @@ class MainActivity : AppCompatActivity() {
 
     private fun onDevices(list: List<DeviceWithId>) {
         devices = list
-        adapter.submit(list)
-        val online = list.filter { it.record.isOnline() }.map { it.id }.toSet()
+        val shown = visibleDevices(list)
+        adapter.submit(shown)
+        val online = shown.filter { it.record.isOnline() }.map { it.id }.toSet()
         // Announce genuinely new arrivals only — the agent's heartbeat
         // rewrites these records constantly.
-        for (device in list) {
+        for (device in shown) {
             if (device.id in online && device.id !in knownOnline && knownOnline.isNotEmpty()) {
                 toasts.push(getString(R.string.toast_node_online, device.record.name), HoloToastHost.Tone.OK)
                 stage.renderer.ripple((Math.random().toFloat() - 0.5f) * 12f, 0f, 0.7f)
             }
         }
         knownOnline = online
-        stats.set(list.size, online.size, adapter.openChannels.size)
-        emptyState.visibility = if (list.isEmpty()) View.VISIBLE else View.GONE
+        stats.set(shown.size, online.size, adapter.openChannels.size)
+        emptyState.visibility = if (shown.isEmpty()) View.VISIBLE else View.GONE
+    }
+
+    /**
+     * One row per device.id normally, or (when merging is on) one row per
+     * distinct name — picking whichever same-named record is online,
+     * falling back to the most recently seen one, so a live device always
+     * wins over its own stale offline duplicates left over from testing.
+     */
+    private fun visibleDevices(list: List<DeviceWithId>): List<DeviceWithId> {
+        if (!mergeDuplicateNames) return list
+        val byName = LinkedHashMap<String, DeviceWithId>()
+        for (device in list) {
+            val existing = byName[device.record.name]
+            if (existing == null) {
+                byName[device.record.name] = device
+                continue
+            }
+            val existingOnline = existing.record.isOnline()
+            val deviceOnline = device.record.isOnline()
+            if (deviceOnline && !existingOnline) {
+                byName[device.record.name] = device
+            } else if (deviceOnline == existingOnline && device.record.lastSeen > existing.record.lastSeen) {
+                byName[device.record.name] = device
+            }
+        }
+        return list.filter { byName[it.record.name] === it }
     }
 
     private fun openViewer(device: DeviceWithId) {

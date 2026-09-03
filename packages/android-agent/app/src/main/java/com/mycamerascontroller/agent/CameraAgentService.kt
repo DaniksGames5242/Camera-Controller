@@ -41,7 +41,11 @@ class CameraAgentService : Service() {
     private val heartbeatIntervalMs = 20_000L
     private val heartbeatRunnable = object : Runnable {
         override fun run() {
-            channels.forEach { Signaling.heartbeat(it.deviceId) }
+            // A forgotten channel's Firebase record is gone on purpose —
+            // heartbeat()'s updateChildren() would otherwise silently
+            // recreate it (with no name, since it only touches
+            // status/lastSeen) every interval.
+            channels.filterNot { it.forgottenLocally }.forEach { Signaling.heartbeat(it.deviceId) }
             mainHandler.postDelayed(this, heartbeatIntervalMs)
         }
     }

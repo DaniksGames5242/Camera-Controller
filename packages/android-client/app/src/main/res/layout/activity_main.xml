@@ -134,6 +134,16 @@
                 android:layout_width="0dp"
                 android:layout_height="wrap_content"
                 android:layout_weight="1" />
+
+            <View
+                android:layout_width="10dp"
+                android:layout_height="1dp" />
+
+            <com.mycamerascontroller.client.holo.HoloButtonView
+                android:id="@+id/dedupeButton"
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:layout_weight="1" />
         </LinearLayout>
     </LinearLayout>
 

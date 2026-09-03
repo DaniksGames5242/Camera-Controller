@@ -301,6 +301,21 @@ canvas#stage-gl {
   );
 }
 
+.dedupe-toggle {
+  flex-shrink: 0;
+  padding: 3px 7px;
+  font-family: inherit;
+  font-size: 8px;
+  letter-spacing: 0.2em;
+  border: 1px solid rgba(53, 230, 255, 0.22);
+  background: transparent;
+  color: var(--ink-faint);
+  cursor: none;
+  transition: background 0.15s, border-color 0.15s, color 0.15s;
+}
+.dedupe-toggle:hover { border-color: var(--cyan-soft); color: #eafcff; }
+.dedupe-toggle.active { background: rgba(53, 230, 255, 0.18); border-color: var(--cyan); color: #eafcff; }
+
 /* ---------- node list ---------- */
 
 #device-scroll {
