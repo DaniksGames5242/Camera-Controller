@@ -69,7 +69,14 @@ class CameraAgentService : Service() {
             PeerConnectionFactory.InitializationOptions.builder(this).createInitializationOptions()
         )
         peerConnectionFactory = PeerConnectionFactory.builder()
-            .setVideoEncoderFactory(DefaultVideoEncoderFactory(eglBase.eglBaseContext, true, true))
+            // H264 high profile support on Android hardware encoders is
+            // notoriously inconsistent — plenty of chipsets advertise it in
+            // SDP without actually encoding to spec, which the far end's
+            // decoder then silently rejects: ICE connects, bytes flow, but
+            // zero frames ever decode (a recorded session comes out as a
+            // 0-byte file). Baseline/constrained-baseline is what virtually
+            // every hardware encoder actually implements correctly.
+            .setVideoEncoderFactory(DefaultVideoEncoderFactory(eglBase.eglBaseContext, true, false))
             .setVideoDecoderFactory(DefaultVideoDecoderFactory(eglBase.eglBaseContext))
             .createPeerConnectionFactory()
 
