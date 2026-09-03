@@ -55,6 +55,11 @@ class CameraAgentService : Service() {
             .setUsername("openrelayproject").setPassword("openrelayproject").createIceServer(),
         PeerConnection.IceServer.builder("turn:openrelay.metered.ca:443")
             .setUsername("openrelayproject").setPassword("openrelayproject").createIceServer(),
+        // Mobile carriers/routers routinely block the UDP TURN candidates
+        // above; this TCP-transport variant is the fallback that still
+        // gets through when they do.
+        PeerConnection.IceServer.builder("turn:openrelay.metered.ca:443?transport=tcp")
+            .setUsername("openrelayproject").setPassword("openrelayproject").createIceServer(),
     )
 
     override fun onCreate() {
