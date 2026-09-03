@@ -78,8 +78,20 @@ export function registerDevice(
 
 export function listenDevices(cb: (devices: DeviceWithId[]) => void): Unsubscribe {
   return onValue(devicesRef(), (snap) => {
-    const val = (snap.val() ?? {}) as Record<string, DeviceRecord>;
-    const list: DeviceWithId[] = Object.entries(val).map(([id, d]) => ({ id, ...d }));
+    const val = (snap.val() ?? {}) as Record<string, Partial<DeviceRecord>>;
+    // A record can be incomplete — e.g. an onDisconnect handler firing
+    // (writing only status/lastSeen) before the device's own initial set()
+    // landed — and every consumer downstream (name sorts, display) assumes
+    // the full shape. Default rather than drop it, so a device that never
+    // finished registering still shows up instead of silently vanishing the
+    // whole list the moment a comparator hits its missing field.
+    const list: DeviceWithId[] = Object.entries(val).map(([id, d]) => ({
+      id,
+      name: d.name ?? '',
+      platform: d.platform ?? 'windows',
+      status: d.status ?? 'offline',
+      lastSeen: d.lastSeen ?? 0,
+    }));
     cb(list);
   });
 }
