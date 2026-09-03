@@ -217,14 +217,22 @@ function relayout() {
   if (focusMode) {
     // One slab front and centre, the rest docked along the bottom as a
     // shallow ribbon — still live, still one click away.
+    //
+    // Each group is sized against the frustum at its OWN depth, not the
+    // z=0 `bounds` above — exactly the mistake stageBounds()'s own doc
+    // comment warns about. The focused slab sits at z=1.4, nearer the
+    // camera than z=0, where the frustum cross-section is narrower; sizing
+    // it off the wider z=0 frustum let it overshoot past the screen edges.
+    const focusBounds = stageBounds(1.4);
+    const ribbonBounds = stageBounds(-2.2);
     list.forEach((session, i) => {
       const panel = session.panel;
       if (i === focusIndex) {
-        const w = Math.min(bounds.halfW * 2 * 0.98, bounds.halfH * 2 * 0.92 * (16 / 9));
+        const w = Math.min(focusBounds.halfW * 2 * 0.98, focusBounds.halfH * 2 * 0.92 * (16 / 9));
         panel.tWidth = w;
         panel.tHeight = w * (9 / 16);
-        panel.tx = bounds.centerX;
-        panel.ty = bounds.centerY + bounds.halfH * 0.16;
+        panel.tx = focusBounds.centerX;
+        panel.ty = focusBounds.centerY + focusBounds.halfH * 0.16;
         panel.tz = 1.4;
         panel.tRotX = 0;
         panel.tRotY = 0;
@@ -234,11 +242,11 @@ function relayout() {
         const others = list.filter((_, j) => j !== focusIndex);
         const k = others.indexOf(session);
         const spread = Math.min(others.length, 6);
-        const w = bounds.halfW * 2 / Math.max(4, spread + 1) * 0.9;
+        const w = ribbonBounds.halfW * 2 / Math.max(4, spread + 1) * 0.9;
         panel.tWidth = w;
         panel.tHeight = w * (9 / 16);
-        panel.tx = bounds.centerX + (k - (others.length - 1) / 2) * (w * 1.12);
-        panel.ty = bounds.centerY - bounds.halfH * 0.86;
+        panel.tx = ribbonBounds.centerX + (k - (others.length - 1) / 2) * (w * 1.12);
+        panel.ty = ribbonBounds.centerY - ribbonBounds.halfH * 0.86;
         panel.tz = -2.2;
         panel.tRotX = 0.22;
         panel.tRotY = 0;
@@ -398,15 +406,17 @@ async function openViewer(deviceId: string, deviceName: string) {
     video.srcObject = e.streams[0];
     video.play().catch(() => { /* autoplay of a muted element; nothing to do */ });
     session.stream = e.streams[0];
-    if (!session.recorder && session.recordingWanted) startRecording(session, e.streams[0]);
   };
 
   // ontrack only means a track was negotiated — with ICE still stuck (e.g.
   // never finding a working candidate pair), it fires with zero frames ever
-  // following, and the chrome would otherwise call that "live" regardless.
-  // 'playing' is the browser's own signal that it actually resumed decoding
-  // real frames, which is the truth this label should track.
+  // following. 'playing' is the browser's own signal that it actually
+  // resumed decoding real frames, which is what both the "live" chrome
+  // label and starting the recording should wait for — starting on ontrack
+  // produced recordings whose first seconds (or their entirety, if the call
+  // never actually connects) were negotiated but frame-less.
   video.addEventListener('playing', () => {
+    if (!session.recorder && session.recordingWanted && session.stream) startRecording(session, session.stream);
     chrome.state.textContent = 'ПРЯМАЯ ТРАНСЛЯЦИЯ';
     chrome.root.classList.add('live');
     stage.interaction.kickGlitch(0.7);
