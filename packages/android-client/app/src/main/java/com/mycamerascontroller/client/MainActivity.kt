@@ -179,7 +179,7 @@ class MainActivity : AppCompatActivity() {
     private fun onDevices(list: List<DeviceWithId>) {
         devices = list
         adapter.submit(list)
-        val online = list.filter { it.record.status == "online" }.map { it.id }.toSet()
+        val online = list.filter { it.record.isOnline() }.map { it.id }.toSet()
         // Announce genuinely new arrivals only — the agent's heartbeat
         // rewrites these records constantly.
         for (device in list) {
@@ -208,7 +208,7 @@ class MainActivity : AppCompatActivity() {
     }
 
     private fun showNodeMenu(device: DeviceWithId, x: Float, y: Float) {
-        val online = device.record.status == "online"
+        val online = device.record.isOnline()
         val items = buildList {
             if (online) add(
                 HoloRadialMenu.Item(getString(R.string.action_open), "▶") { openViewer(device) }
@@ -230,7 +230,7 @@ class MainActivity : AppCompatActivity() {
             this,
             title = device.record.name,
             body = getString(
-                if (device.record.status == "online") R.string.forget_device_confirm_online
+                if (device.record.isOnline()) R.string.forget_device_confirm_online
                 else R.string.forget_device_confirm
             ),
             confirmLabel = getString(R.string.forget_device),

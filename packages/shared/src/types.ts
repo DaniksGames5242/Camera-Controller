@@ -11,6 +11,21 @@ export interface DeviceWithId extends DeviceRecord {
   id: string;
 }
 
+/**
+ * A device's heartbeat is every 20s (see registerDevice). status:'online'
+ * alone isn't trustworthy on its own: it only flips to 'offline' via
+ * onDisconnect, which fires when Firebase's server notices the socket
+ * dropped — that can lag well behind the agent actually being gone
+ * (uninstalled, force-killed, network cut), leaving a device that shows
+ * "online" forever with nothing really there. Treat a stale heartbeat as
+ * offline regardless of the stored status.
+ */
+const STALE_ONLINE_MS = 60_000;
+
+export function isDeviceOnline(device: Pick<DeviceRecord, 'status' | 'lastSeen'>): boolean {
+  return device.status === 'online' && Date.now() - device.lastSeen < STALE_ONLINE_MS;
+}
+
 export interface SessionDescriptionPayload {
   type: RTCSdpType;
   sdp: string;

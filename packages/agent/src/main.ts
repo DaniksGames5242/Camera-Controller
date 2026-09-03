@@ -40,6 +40,16 @@ app.whenReady().then(() => {
   });
   win.loadFile(join(__dirname, 'renderer', 'index.html'));
 
+  // WebRTC by default gathers a host candidate for every network adapter —
+  // including VPN tunnel interfaces (Tailscale, Teredo, etc.) that a remote
+  // viewer can never actually reach. Diagnosed live against this exact
+  // agent: a viewer's call sat at iceConnectionState=checking forever, 0
+  // bytes ever received, its candidate list flooded with exactly this kind
+  // of dead-end address. Restrict gathering to the machine's actual
+  // default-route interface (still both its private and public/STUN
+  // address) so ICE spends its attempts on pairs that can actually connect.
+  win.webContents.setWebRTCIPHandlingPolicy('default_public_and_private_interfaces');
+
   // Fired by the renderer when this device's Firebase record has been
   // deleted from a client — i.e. someone explicitly removed this agent.
   // Quitting is the actual "stop working" the removal implies; autostart

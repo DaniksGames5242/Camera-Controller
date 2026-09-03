@@ -78,7 +78,7 @@ class DeviceAdapter(
         node.onTouchPoint = { x, y -> onTouchPoint(x, y) }
         node.onActivate = activate@{
             val current = holder.bindingAdapterPosition.takeIf { it >= 0 }?.let { devices.getOrNull(it) } ?: return@activate
-            if (current.record.status == "online" || openChannels.contains(current.id)) onActivate(current)
+            if (current.record.isOnline() || openChannels.contains(current.id)) onActivate(current)
             else node.reject()
         }
         node.onLongPressAt = longPress@{ x, y ->
@@ -92,7 +92,7 @@ class DeviceAdapter(
     }
 
     private fun bindState(holder: ViewHolder, device: DeviceWithId) {
-        holder.node.online = device.record.status == "online"
+        holder.node.online = device.record.isOnline()
         holder.node.channelOpen = openChannels.contains(device.id)
     }
 

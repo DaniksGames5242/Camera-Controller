@@ -7,4 +7,5 @@ contextBridge.exposeInMainWorld('mcc', {
     ipcRenderer.send('recording-chunk', recordingId, chunk),
   finishRecording: (recordingId: string, endIso: string) =>
     ipcRenderer.send('recording-finish', recordingId, endIso),
+  log: (msg: string) => ipcRenderer.send('diag-log', msg),
 });

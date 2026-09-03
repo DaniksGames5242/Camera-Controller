@@ -11,6 +11,7 @@ import {
   getDeviceSettings,
   setDeviceSettings,
   createPeerConnection,
+  isDeviceOnline,
   type DeviceWithId,
   type IceCandidatePayload,
   type DeviceSettings,
@@ -31,6 +32,7 @@ declare global {
       startRecording: (deviceName: string, startIso: string) => Promise<string>;
       writeRecordingChunk: (recordingId: string, chunk: ArrayBuffer) => void;
       finishRecording: (recordingId: string, endIso: string) => void;
+      log: (msg: string) => void;
     };
   }
 }
@@ -391,24 +393,39 @@ async function openViewer(deviceId: string, deviceName: string) {
   stage.interaction.kickGlitch(0.45);
 
   pc.ontrack = (e) => {
+    window.mcc.log(`[${deviceName}] ontrack kind=${e.track.kind} readyState=${e.track.readyState} muted=${e.track.muted}`);
     if (e.track.kind !== 'video') return;
     video.srcObject = e.streams[0];
     video.play().catch(() => { /* autoplay of a muted element; nothing to do */ });
     session.stream = e.streams[0];
-    chrome.state.textContent = 'ПРЯМАЯ ТРАНСЛЯЦИЯ';
-    chrome.root.classList.add('live');
-    stage.interaction.kickGlitch(0.7);
     if (!session.recorder && session.recordingWanted) startRecording(session, e.streams[0]);
   };
 
+  // ontrack only means a track was negotiated — with ICE still stuck (e.g.
+  // never finding a working candidate pair), it fires with zero frames ever
+  // following, and the chrome would otherwise call that "live" regardless.
+  // 'playing' is the browser's own signal that it actually resumed decoding
+  // real frames, which is the truth this label should track.
+  video.addEventListener('playing', () => {
+    chrome.state.textContent = 'ПРЯМАЯ ТРАНСЛЯЦИЯ';
+    chrome.root.classList.add('live');
+    stage.interaction.kickGlitch(0.7);
+  });
+
   let remoteDescSet = false;
   const pendingCandidates: RTCIceCandidate[] = [];
+
+  pc.onicecandidateerror = (e) => {
+    const ev = e as RTCPeerConnectionIceErrorEvent;
+    window.mcc.log(`[${deviceName}] icecandidateerror: url=${ev.url} errorCode=${ev.errorCode} errorText=${ev.errorText}`);
+  };
 
   pc.onicecandidate = (e) => {
     if (e.candidate) sendIceCandidate(deviceId, callId, 'caller', toPayload(e.candidate));
   };
 
   pc.onconnectionstatechange = () => {
+    window.mcc.log(`[${deviceName}] connectionState=${pc.connectionState}`);
     if (pc.connectionState === 'connected') chrome.root.classList.add('connected');
     if (['failed', 'closed'].includes(pc.connectionState)) {
       if (sessions.has(deviceId)) {
@@ -417,6 +434,32 @@ async function openViewer(deviceId: string, deviceName: string) {
       }
     }
   };
+  pc.oniceconnectionstatechange = () => window.mcc.log(`[${deviceName}] iceConnectionState=${pc.iceConnectionState}`);
+
+  const statsInterval = setInterval(async () => {
+    if (pc.connectionState === 'closed') { clearInterval(statsInterval); return; }
+    const stats = await pc.getStats();
+    stats.forEach((report) => {
+      if (report.type === 'inbound-rtp' && report.kind === 'video') {
+        window.mcc.log(
+          `[${deviceName}] inbound video: bytesReceived=${report.bytesReceived} packetsReceived=${report.packetsReceived} framesReceived=${report.framesReceived} framesDecoded=${report.framesDecoded} frameWidth=${report.frameWidth} frameHeight=${report.frameHeight} codecId=${report.codecId} pliCount=${report.pliCount} pauseCount=${report.pauseCount}`
+        );
+      }
+      if (report.type === 'codec' && report.mimeType?.includes('video')) {
+        window.mcc.log(`[${deviceName}] codec: ${report.mimeType} sdpFmtpLine=${report.sdpFmtpLine}`);
+      }
+      if (report.type === 'candidate-pair') {
+        window.mcc.log(
+          `[${deviceName}] candidate-pair state=${report.state} local=${report.localCandidateId} remote=${report.remoteCandidateId} nominated=${report.nominated} bytesReceived=${report.bytesReceived}`
+        );
+      }
+      if (report.type === 'local-candidate' || report.type === 'remote-candidate') {
+        window.mcc.log(
+          `[${deviceName}] ${report.type} id=${report.id} type=${report.candidateType} protocol=${report.protocol} relayProtocol=${report.relayProtocol} address=${report.address} port=${report.port}`
+        );
+      }
+    });
+  }, 4000);
 
   unsub.push(
     onAnswerSet(deviceId, callId, async (answer) => {
@@ -694,7 +737,7 @@ function renderList() {
     window.setTimeout(() => row.root.remove(), 420);
   }
 
-  const online = devices.filter((d) => d.status === 'online').length;
+  const online = devices.filter(isDeviceOnline).length;
   statNodes.textContent = String(devices.length);
   statOnline.textContent = String(online);
   statChannels.textContent = String(sessions.size);
@@ -752,7 +795,7 @@ function buildDeviceRow(device: DeviceWithId): DeviceRow {
     tiltX: new Damper(0, 12),
     tiltY: new Damper(0, 12),
     lift: new Spring(0, 200, 19),
-    online: device.status === 'online',
+    online: isDeviceOnline(device),
     seed: Math.random() * 1000,
   };
   row.name.set(device.name);
@@ -796,7 +839,7 @@ function activateRow(deviceId: string) {
     focusSession(deviceId);
     return;
   }
-  if (device.status !== 'online') {
+  if (!isDeviceOnline(device)) {
     row?.root.classList.add('reject');
     window.setTimeout(() => row?.root.classList.remove('reject'), 500);
     toasts.push(`Узел «${device.name}» не в сети`, 'warn', 2600);
@@ -806,7 +849,7 @@ function activateRow(deviceId: string) {
 }
 
 function updateDeviceRow(row: DeviceRow, device: DeviceWithId) {
-  const online = device.status === 'online';
+  const online = isDeviceOnline(device);
   const open = sessions.has(device.id);
   if (row.online !== online) {
     row.online = online;
@@ -847,7 +890,7 @@ function openNodeMenu(x: number, y: number, deviceId: string) {
 
 async function confirmForget(device: DeviceWithId) {
   const message =
-    device.status === 'online'
+    isDeviceOnline(device)
       ? `Агент на этом устройстве остановится и не будет виден, пока его не запустят заново.`
       : `Если узел снова выйдет в сеть, он появится заново.`;
   const ok = await confirmDialog.ask(`Забыть «${device.name}»?`, message, 'ЗАБЫТЬ');
@@ -1268,7 +1311,7 @@ function refreshCommands() {
       id: `open:${device.id}`,
       group: 'УЗЛЫ',
       title: `${open ? 'Фокус' : 'Открыть'} · ${device.name}`,
-      hint: device.status === 'online' ? 'в сети' : 'не в сети',
+      hint: isDeviceOnline(device) ? 'в сети' : 'не в сети',
       run: () => activateRow(device.id),
     });
     commands.push({

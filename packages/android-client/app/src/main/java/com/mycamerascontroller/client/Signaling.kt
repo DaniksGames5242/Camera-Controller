@@ -22,6 +22,20 @@ data class DeviceRecord @JvmOverloads constructor(
 
 data class DeviceWithId(val id: String, val record: DeviceRecord)
 
+/**
+ * The heartbeat is every 20s (see the agents' registerDevice). status
+ * "online" alone isn't trustworthy: it only flips to "offline" via
+ * onDisconnect, which fires when Firebase's server notices the socket
+ * dropped — that can lag well behind the agent actually being gone
+ * (uninstalled, force-killed, network cut), leaving a device that shows
+ * online forever with nothing really there. Treat a stale heartbeat as
+ * offline regardless of the stored status.
+ */
+private const val STALE_ONLINE_MS = 60_000L
+
+fun DeviceRecord.isOnline(): Boolean =
+    status == "online" && System.currentTimeMillis() - lastSeen < STALE_ONLINE_MS
+
 data class SdpPayload @JvmOverloads constructor(
     var type: String = "",
     var sdp: String = "",
