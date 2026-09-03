@@ -1192,10 +1192,19 @@ function bindStageInput() {
   // normal overview → pulled-back overview (everything visible at once) →
   // each open channel in turn, one at a time. Free zoom on a hologram with
   // no real depth cues to judge distance by mostly just gets people lost.
+  // A trackpad (and plenty of mice) fire many 'wheel' events per physical
+  // notch/swipe — without throttling, one gesture could fire stepView()
+  // (and its kickGlitch) a dozen times, blowing through several view modes
+  // at once and saturating the glitch post-effect for the whole burst.
+  let lastWheelStepAt = 0;
   canvas.addEventListener('wheel', (e) => {
     e.preventDefault();
     const dir = Math.sign(e.deltaY);
-    if (dir !== 0) stepView(dir);
+    if (dir === 0) return;
+    const now = performance.now();
+    if (now - lastWheelStepAt < 220) return;
+    lastWheelStepAt = now;
+    stepView(dir);
   }, { passive: false });
 
   canvas.addEventListener('contextmenu', (e) => e.preventDefault());

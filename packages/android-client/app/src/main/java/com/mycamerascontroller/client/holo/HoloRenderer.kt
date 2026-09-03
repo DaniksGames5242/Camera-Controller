@@ -97,10 +97,18 @@ class HoloRenderer : GLSurfaceView.Renderer {
     override fun onSurfaceChanged(gl: GL10?, w: Int, h: Int) {
         width = max(1, w)
         height = max(1, h)
+        // The raymarch cost is per pixel of the *scene* target, not the
+        // screen — this is the single biggest lever a phone GPU has, well
+        // before the step-count/particle governor below even engages.
+        // Composited back through the bloom chain's linear filtering, the
+        // softness reads as part of the hologram's look rather than as
+        // upscaling artifacts.
+        val sceneW = max(1, (width * RENDER_SCALE).toInt())
+        val sceneH = max(1, (height * RENDER_SCALE).toInt())
         scene?.release(); bloomA?.release(); bloomB?.release()
-        scene = GlTarget(width, height)
-        bloomA = GlTarget(width / 2, height / 2)
-        bloomB = GlTarget(width / 2, height / 2)
+        scene = GlTarget(sceneW, sceneH)
+        bloomA = GlTarget(sceneW / 2, sceneH / 2)
+        bloomB = GlTarget(sceneW / 2, sceneH / 2)
     }
 
     override fun onDrawFrame(gl: GL10?) {
@@ -131,7 +139,7 @@ class HoloRenderer : GLSurfaceView.Renderer {
         GLES30.glDisable(GLES30.GL_BLEND)
 
         stageProgram?.use()?.apply {
-            v2("uResolution", width.toFloat(), height.toFloat())
+            v2("uResolution", sceneTarget.width.toFloat(), sceneTarget.height.toFloat())
             f("uTime", time)
             v2("uTilt", tiltX, tiltY)
             f("uEnergy", energy)
@@ -147,7 +155,7 @@ class HoloRenderer : GLSurfaceView.Renderer {
         GLES30.glBlendFunc(GLES30.GL_SRC_ALPHA, GLES30.GL_ONE)
         particleProgram?.use()?.apply {
             f("uTime", time)
-            v2("uResolution", width.toFloat(), height.toFloat())
+            v2("uResolution", sceneTarget.width.toFloat(), sceneTarget.height.toFloat())
             v2("uTilt", tiltX, tiltY)
             f("uEnergy", energy)
             f("uBoot", max(0.08f, boot))
@@ -183,6 +191,9 @@ class HoloRenderer : GLSurfaceView.Renderer {
         compositeProgram?.use()?.apply {
             tex("uScene", 0, sceneTarget.texture)
             tex("uBloom", 1, bloom1.texture)
+            // This pass draws at the native viewport (below), unlike the
+            // scaled-down scene/particle passes above — screen-space effects
+            // here (scanlines, vignette) need the real pixel resolution.
             v2("uResolution", width.toFloat(), height.toFloat())
             f("uTime", time)
             f("uGlitch", min(1f, glitch))
@@ -206,5 +217,10 @@ class HoloRenderer : GLSurfaceView.Renderer {
             if (particleCount < 2600) particleCount = min(2600, particleCount + 12)
             else quality = min(1f, quality + dt * 0.3f)
         }
+    }
+
+    private companion object {
+        /** Fraction of native resolution the raymarched scene renders at. */
+        const val RENDER_SCALE = 0.65f
     }
 }
