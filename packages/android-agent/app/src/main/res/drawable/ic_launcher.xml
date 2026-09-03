@@ -1,20 +1,31 @@
-<!-- Agent icon: a camera actively broadcasting (signal arcs) — distinct from
-     the client's "eye" icon so the two apps are never confused on a device. -->
+<!-- Agent icon: a settings gear wrapping a small circuit/node glyph — the
+     GT67 mark used to identify this app on a device's home screen. -->
 <vector xmlns:android="http://schemas.android.com/apk/res/android"
     android:width="108dp"
     android:height="108dp"
     android:viewportWidth="24"
     android:viewportHeight="24">
     <path
-        android:fillColor="#241414"
+        android:fillColor="#FFFFFF"
         android:pathData="M0,0h24v24h-24z" />
     <path
-        android:fillColor="#E5484D"
-        android:pathData="M15,10.5V7a1,1 0,0 0,-1 -1H4A1,1 0,0 0,3 7v10a1,1 0,0 0,1 1h10a1,1 0,0 0,1 -1v-3.5l4,4v-11z" />
+        android:fillColor="#00000000"
+        android:strokeColor="#111111"
+        android:strokeWidth="1.35"
+        android:strokeLineCap="round"
+        android:strokeLineJoin="round"
+        android:pathData="M 12.0,1.8 L 14.74,4.48 L 18.56,4.19 L 18.93,8.0 L 22.05,10.23 L 19.88,13.39 L 20.83,17.1 L 17.14,18.13 L 15.49,21.58 L 12.0,20.0 L 8.51,21.58 L 6.86,18.13 L 3.17,17.1 L 4.12,13.39 L 1.95,10.23 L 5.07,8.0 L 5.44,4.19 L 9.26,4.48 Z" />
     <path
-        android:fillColor="#F3A0A3"
-        android:pathData="M18.5,5.5c1.7,1.7 1.7,4.4 0,6.1l-1.1,-1.1c1.1,-1.1 1.1,-2.9 0,-4l1.1,-1z" />
+        android:fillColor="#00000000"
+        android:strokeColor="#111111"
+        android:strokeWidth="1.05"
+        android:strokeLineCap="round"
+        android:strokeLineJoin="round"
+        android:pathData="M12,8.7 L9.3,11.5 L9.3,15 L7.3,17 M12,8.7 L14.7,11.5 L14.7,15 L16.7,17 M7.3,17 C9.5,19.4 14.5,19.4 16.7,17" />
     <path
-        android:fillColor="#F3A0A3"
-        android:pathData="M20.8,3.2c3,3 3,7.8 0,10.8l-1.1,-1.1c2.3,-2.3 2.3,-6.1 0,-8.5l1.1,-1.2z" />
+        android:fillColor="#111111"
+        android:pathData="M12,5.9 m-1.4,0 a1.4,1.4 0,1 1,2.8 0 a1.4,1.4 0,1 1,-2.8 0" />
+    <path
+        android:fillColor="#111111"
+        android:pathData="M6.2,12.5 m-0.9,0 a0.9,0.9 0,1 1,1.8 0 a0.9,0.9 0,1 1,-1.8 0" />
 </vector>

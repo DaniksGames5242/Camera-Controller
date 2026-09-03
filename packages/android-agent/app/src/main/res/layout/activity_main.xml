@@ -1,78 +1,21 @@
 <?xml version="1.0" encoding="utf-8"?>
-<FrameLayout xmlns:android="http://schemas.android.com/apk/res/android"
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
     android:layout_width="match_parent"
     android:layout_height="match_parent"
-    android:background="@color/bg">
+    android:background="@color/bg"
+    android:orientation="vertical"
+    android:gravity="center"
+    android:padding="32dp">
 
-    <com.mycamerascontroller.agent.holo.AgentStageView
-        android:id="@+id/stage"
+    <com.mycamerascontroller.agent.holo.AgentButtonView
+        android:id="@+id/grantPermissionsButton"
         android:layout_width="match_parent"
-        android:layout_height="match_parent" />
+        android:layout_height="wrap_content"
+        android:layout_marginBottom="12dp" />
 
-    <LinearLayout
+    <com.mycamerascontroller.agent.holo.AgentButtonView
+        android:id="@+id/batteryOptButton"
         android:layout_width="match_parent"
-        android:layout_height="match_parent"
-        android:orientation="vertical"
-        android:gravity="center"
-        android:padding="32dp">
+        android:layout_height="wrap_content" />
 
-        <com.mycamerascontroller.agent.holo.DecodeTextView
-            android:id="@+id/brandMark"
-            android:layout_width="wrap_content"
-            android:layout_height="wrap_content"
-            android:fontFamily="monospace"
-            android:letterSpacing="0.14"
-            android:textColor="@color/ink"
-            android:textSize="19sp"
-            android:textStyle="bold" />
-
-        <TextView
-            android:layout_width="wrap_content"
-            android:layout_height="wrap_content"
-            android:layout_marginTop="6dp"
-            android:layout_marginBottom="34dp"
-            android:fontFamily="monospace"
-            android:letterSpacing="0.24"
-            android:text="@string/brand_sub"
-            android:textColor="@color/ink_faint"
-            android:textSize="9sp" />
-
-        <!-- Bracketed status readout: the same "reticle around live state"
-             language as the client apps, standing in for a plain spinner. -->
-        <FrameLayout
-            android:layout_width="wrap_content"
-            android:layout_height="wrap_content"
-            android:layout_marginBottom="36dp">
-
-            <com.mycamerascontroller.agent.holo.HoloBracketView
-                android:id="@+id/statusFrame"
-                android:layout_width="220dp"
-                android:layout_height="120dp" />
-
-            <com.mycamerascontroller.agent.holo.DecodeTextView
-                android:id="@+id/statusText"
-                android:layout_width="200dp"
-                android:layout_height="wrap_content"
-                android:layout_gravity="center"
-                android:fontFamily="monospace"
-                android:gravity="center"
-                android:letterSpacing="0.08"
-                android:lineSpacingExtra="4dp"
-                android:textColor="@color/ink"
-                android:textSize="12sp" />
-        </FrameLayout>
-
-        <com.mycamerascontroller.agent.holo.AgentButtonView
-            android:id="@+id/grantPermissionsButton"
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:layout_marginBottom="12dp" />
-
-        <com.mycamerascontroller.agent.holo.AgentButtonView
-            android:id="@+id/batteryOptButton"
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content" />
-
-    </LinearLayout>
-
-</FrameLayout>
+</LinearLayout>
