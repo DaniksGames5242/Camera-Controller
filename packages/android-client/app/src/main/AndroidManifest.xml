@@ -6,6 +6,10 @@
     <!-- Only for the optional talk-back mic button — requested lazily on
          first press, not up front. -->
     <uses-permission android:name="android.permission.RECORD_AUDIO" />
+    <!-- Haptics.materialise/reject/dragTick call Vibrator.vibrate() directly
+         (not performHapticFeedback, which needs no permission) — without this,
+         every one of those calls throws a SecurityException and crashes. -->
+    <uses-permission android:name="android.permission.VIBRATE" />
 
     <application
         android:allowBackup="false"

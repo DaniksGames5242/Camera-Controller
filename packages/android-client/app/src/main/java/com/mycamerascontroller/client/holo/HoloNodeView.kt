@@ -4,6 +4,7 @@ import android.annotation.SuppressLint
 import android.content.Context
 import android.graphics.Canvas
 import android.graphics.LinearGradient
+import android.graphics.Matrix
 import android.graphics.Paint
 import android.graphics.Path
 import android.graphics.RadialGradient
@@ -89,6 +90,31 @@ class HoloNodeView(context: Context) : View(context) {
     private val cut = context.dp(13f)
     private val padH = context.dp(16f)
     private val gearSize = context.dp(44f)
+
+    // Every card redraws at 60fps by design (see onAttachedToWindow), so any
+    // shader rebuilt unconditionally in onDraw becomes a per-frame, per-visible-row
+    // allocation — with several cards on screen that's enough garbage to stall
+    // the GC and stutter the whole list. These are built once and repositioned
+    // with a reused Matrix, or left in place and dimmed via Paint.alpha (which
+    // multiplies a shader's own alpha), instead of being recreated every frame.
+    private var bodyShader: LinearGradient? = null
+    private var bodyShaderW = -1
+    private var bodyShaderH = -1
+    private var washShader: RadialGradient? = null
+    private var washShaderColor = 0
+    private var washShaderW = -1
+    private var washShaderH = -1
+    private var scanShader: LinearGradient? = null
+    private var scanShaderTint = 0
+    private val scanMatrix = Matrix()
+    private var edgeShader: SweepGradient? = null
+    private var edgeShaderTint = 0
+    private var edgeShaderL = -1f
+    private var edgeShaderAlpha = -1f
+    private val edgeMatrix = Matrix()
+    private var meterShader: LinearGradient? = null
+    private var meterShaderColor = 0
+    private val meterMatrix = Matrix()
 
     init {
         isClickable = true
@@ -197,14 +223,20 @@ class HoloNodeView(context: Context) : View(context) {
         canvas.clipPath(outline)
 
         // Body: a sheet of glass with the room glowing through it.
-        fill.shader = LinearGradient(
-            0f, 0f, w, h,
-            Holo.alpha(0xFF0C1E2C.toInt(), (0.62f + 0.2f * l) * alpha),
-            Holo.alpha(0xFF060E16.toInt(), 0.42f * alpha),
-            Shader.TileMode.CLAMP
-        )
+        if (bodyShader == null || bodyShaderW != w.toInt() || bodyShaderH != h.toInt()) {
+            bodyShader = LinearGradient(
+                0f, 0f, w, h,
+                Holo.alpha(0xFF0C1E2C.toInt(), 0.62f),
+                Holo.alpha(0xFF060E16.toInt(), 0.42f),
+                Shader.TileMode.CLAMP
+            )
+            bodyShaderW = w.toInt(); bodyShaderH = h.toInt()
+        }
+        fill.shader = bodyShader
+        fill.alpha = (alpha.coerceIn(0f, 1f) * 255).toInt()
         canvas.drawRect(0f, 0f, w, h, fill)
         fill.shader = null
+        fill.alpha = 255
 
         // Pressure pools light where the finger is.
         if (p > 0.01f) {
@@ -222,42 +254,65 @@ class HoloNodeView(context: Context) : View(context) {
             online -> Holo.MINT
             else -> Holo.INK_DIM
         }
-        glow.shader = RadialGradient(
-            0f, h / 2f, w * 0.7f,
-            Holo.alpha(statusColor, (0.16f + 0.14f * l) * alpha), Holo.alpha(statusColor, 0f),
-            Shader.TileMode.CLAMP
-        )
+        if (washShader == null || washShaderColor != statusColor || washShaderW != w.toInt() || washShaderH != h.toInt()) {
+            washShader = RadialGradient(
+                0f, h / 2f, w * 0.7f,
+                Holo.alpha(statusColor, 1f), Holo.alpha(statusColor, 0f),
+                Shader.TileMode.CLAMP
+            )
+            washShaderColor = statusColor; washShaderW = w.toInt(); washShaderH = h.toInt()
+        }
+        glow.shader = washShader
+        glow.alpha = (((0.16f + 0.14f * l) * alpha).coerceIn(0f, 1f) * 255).toInt()
         canvas.drawRect(0f, 0f, w, h, glow)
         glow.shader = null
+        glow.alpha = 255
 
         // A scan line crossing the card, phase-offset per card by its seed.
         val scanY = ((t * 0.32f + meterSeed * 0.017f) % 1f) * h
-        fill.shader = LinearGradient(
-            0f, scanY - context.dp(10f), 0f, scanY + context.dp(10f),
-            intArrayOf(Holo.alpha(tint, 0f), Holo.alpha(tint, 0.20f * alpha), Holo.alpha(tint, 0f)),
-            null, Shader.TileMode.CLAMP
-        )
-        canvas.drawRect(0f, scanY - context.dp(10f), w, scanY + context.dp(10f), fill)
+        val scanHalf = context.dp(10f)
+        if (scanShader == null || scanShaderTint != tint) {
+            scanShader = LinearGradient(
+                0f, -scanHalf, 0f, scanHalf,
+                intArrayOf(Holo.alpha(tint, 0f), Holo.alpha(tint, 1f), Holo.alpha(tint, 0f)),
+                null, Shader.TileMode.CLAMP
+            )
+            scanShaderTint = tint
+        }
+        scanMatrix.reset()
+        scanMatrix.postTranslate(0f, scanY)
+        scanShader!!.setLocalMatrix(scanMatrix)
+        fill.shader = scanShader
+        fill.alpha = ((0.20f * alpha).coerceIn(0f, 1f) * 255).toInt()
+        canvas.drawRect(0f, scanY - scanHalf, w, scanY + scanHalf, fill)
         fill.shader = null
+        fill.alpha = 255
         canvas.restore()
 
-        // Circulating edge light.
+        // Circulating edge light. Rebuilt only when its colours actually moved
+        // (tint change, or the press/lift springs still settling) — at rest the
+        // shader is untouched and only its rotation matrix is updated.
         stroke.strokeWidth = context.dp(1.2f)
-        stroke.shader = SweepGradient(
-            w / 2f, h / 2f,
-            intArrayOf(
-                Holo.alpha(tint, 0f),
-                Holo.alpha(tint, (0.15f + 0.75f * l) * alpha),
-                Holo.alpha(Holo.VIOLET, (0.10f + 0.4f * l) * alpha),
-                Holo.alpha(tint, 0f),
-                Holo.alpha(tint, 0f),
-            ),
-            floatArrayOf(0f, 0.10f, 0.22f, 0.42f, 1f)
-        ).also { shader ->
-            val m = android.graphics.Matrix()
-            m.setRotate((t * 62f) % 360f, w / 2f, h / 2f)
-            shader.setLocalMatrix(m)
+        if (edgeShader == null || edgeShaderTint != tint ||
+            abs(edgeShaderL - l) > 0.004f || abs(edgeShaderAlpha - alpha) > 0.004f
+        ) {
+            edgeShader = SweepGradient(
+                w / 2f, h / 2f,
+                intArrayOf(
+                    Holo.alpha(tint, 0f),
+                    Holo.alpha(tint, (0.15f + 0.75f * l) * alpha),
+                    Holo.alpha(Holo.VIOLET, (0.10f + 0.4f * l) * alpha),
+                    Holo.alpha(tint, 0f),
+                    Holo.alpha(tint, 0f),
+                ),
+                floatArrayOf(0f, 0.10f, 0.22f, 0.42f, 1f)
+            )
+            edgeShaderTint = tint; edgeShaderL = l; edgeShaderAlpha = alpha
         }
+        edgeMatrix.reset()
+        edgeMatrix.setRotate((t * 62f) % 360f, w / 2f, h / 2f)
+        edgeShader!!.setLocalMatrix(edgeMatrix)
+        stroke.shader = edgeShader
         canvas.drawPath(outline, stroke)
         stroke.shader = null
 
@@ -302,20 +357,33 @@ class HoloNodeView(context: Context) : View(context) {
         val barGap = context.dp(2.5f)
         val meterH = context.dp(24f)
         val amplitude = if (online) 1f else 0.07f
+        if (meterShader == null || meterShaderColor != statusColor) {
+            // Baked at the shape's own 0.15/0.95 ramp; each bar just rescales
+            // this one shader onto its own rect via meterMatrix instead of
+            // allocating a fresh gradient of its own every frame.
+            meterShader = LinearGradient(
+                0f, 1f, 0f, 0f,
+                Holo.alpha(statusColor, 0.15f), Holo.alpha(statusColor, 0.95f),
+                Shader.TileMode.CLAMP
+            )
+            meterShaderColor = statusColor
+        }
+        bar.shader = meterShader
+        bar.alpha = (alpha.coerceIn(0f, 1f) * 255).toInt()
         for (i in 0 until 12) {
             val phase = t * 2.4f + i * 0.55f + meterSeed
             val level = ((sin(phase) * 0.5f + sin(phase * 1.87f + 1.3f) * 0.3f + sin(phase * 3.31f) * 0.2f) * 0.5f + 0.5f)
             val scaled = 0.12f + level * 0.88f * amplitude * (0.55f + 0.45f * l)
             val x = meterRight - (11 - i) * (barW + barGap)
             val barH = meterH * scaled
-            bar.shader = LinearGradient(
-                0f, dotY + meterH / 2f, 0f, dotY + meterH / 2f - barH,
-                Holo.alpha(statusColor, 0.15f * alpha), Holo.alpha(statusColor, 0.95f * alpha),
-                Shader.TileMode.CLAMP
-            )
+            meterMatrix.reset()
+            meterMatrix.setScale(1f, barH)
+            meterMatrix.postTranslate(x, dotY + meterH / 2f - barH)
+            meterShader!!.setLocalMatrix(meterMatrix)
             canvas.drawRect(x, dotY + meterH / 2f - barH, x + barW, dotY + meterH / 2f, bar)
         }
         bar.shader = null
+        bar.alpha = 255
 
         // ---- settings affordance --------------------------------------------
         val gearCx = w - padH - gearSize / 2f

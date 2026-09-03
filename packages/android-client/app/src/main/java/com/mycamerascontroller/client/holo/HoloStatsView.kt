@@ -3,6 +3,7 @@ package com.mycamerascontroller.client.holo
 import android.content.Context
 import android.graphics.Canvas
 import android.graphics.LinearGradient
+import android.graphics.Matrix
 import android.graphics.Paint
 import android.graphics.Shader
 import android.graphics.Typeface
@@ -44,6 +45,15 @@ class HoloStatsView @JvmOverloads constructor(
     private val framePaint = Paint(Paint.ANTI_ALIAS_FLAG).apply { style = Paint.Style.STROKE }
     private val glowPaint = Paint(Paint.ANTI_ALIAS_FLAG)
 
+    // Rebuilt only when the cell size changes instead of 6 times every frame
+    // (this view redraws continuously — see onAttachedToWindow).
+    private var washShader: LinearGradient? = null
+    private var washShaderCellW = -1
+    private var washShaderH = -1
+    private val barShaders = arrayOfNulls<LinearGradient>(3)
+    private var barShaderCellW = -1
+    private val barMatrix = Matrix()
+
     init {
         keyPaint.textSize = context.sp(9f)
         valuePaint.textSize = context.sp(22f)
@@ -84,11 +94,15 @@ class HoloStatsView @JvmOverloads constructor(
             canvas.save()
             canvas.translate(left, 0f)
 
-            glowPaint.shader = LinearGradient(
-                0f, 0f, 0f, h,
-                Holo.alpha(0xFF0A1E2E.toInt(), 0.55f), Holo.alpha(0xFF050D16.toInt(), 0.35f),
-                Shader.TileMode.CLAMP
-            )
+            if (washShader == null || washShaderCellW != cellW.toInt() || washShaderH != h.toInt()) {
+                washShader = LinearGradient(
+                    0f, 0f, 0f, h,
+                    Holo.alpha(0xFF0A1E2E.toInt(), 0.55f), Holo.alpha(0xFF050D16.toInt(), 0.35f),
+                    Shader.TileMode.CLAMP
+                )
+                washShaderCellW = cellW.toInt(); washShaderH = h.toInt()
+            }
+            glowPaint.shader = washShader
             canvas.drawRect(0f, 0f, cellW, h, glowPaint)
             glowPaint.shader = null
 
@@ -99,10 +113,22 @@ class HoloStatsView @JvmOverloads constructor(
             // A light travelling along the top edge, offset per cell.
             val phase = ((t * 0.35f + i * 0.24f) % 1f)
             val barW = cellW * 0.45f
-            glowPaint.shader = LinearGradient(
-                cellW * phase - barW, 0f, cellW * phase, 0f,
-                Holo.alpha(stat.color, 0f), Holo.alpha(stat.color, 0.85f), Shader.TileMode.CLAMP
-            )
+            if (barShaderCellW != cellW.toInt()) {
+                for (bi in barShaders.indices) barShaders[bi] = null
+                barShaderCellW = cellW.toInt()
+            }
+            var barShader = barShaders[i]
+            if (barShader == null) {
+                barShader = LinearGradient(
+                    -barW, 0f, 0f, 0f,
+                    Holo.alpha(stat.color, 0f), Holo.alpha(stat.color, 0.85f), Shader.TileMode.CLAMP
+                )
+                barShaders[i] = barShader
+            }
+            barMatrix.reset()
+            barMatrix.postTranslate(cellW * phase, 0f)
+            barShader.setLocalMatrix(barMatrix)
+            glowPaint.shader = barShader
             canvas.drawRect(cellW * phase - barW, 0f, cellW * phase, context.dp(1.5f), glowPaint)
             glowPaint.shader = null
 
