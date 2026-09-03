@@ -61,6 +61,14 @@ class CameraAgentService : Service() {
         // gets through when they do.
         PeerConnection.IceServer.builder("turn:openrelay.metered.ca:443?transport=tcp")
             .setUsername("openrelayproject").setPassword("openrelayproject").createIceServer(),
+        // Real TLS on 443 (confirmed: the server presents a valid cert for
+        // *.relay.metered.ca there) — carrier DPI that resets the plain-TCP
+        // TURN candidate above because it doesn't look like HTTPS generally
+        // lets this one through, since it's indistinguishable from an
+        // ordinary HTTPS connection. This is usually what actually gets a
+        // phone on mobile data connected.
+        PeerConnection.IceServer.builder("turns:openrelay.metered.ca:443?transport=tcp")
+            .setUsername("openrelayproject").setPassword("openrelayproject").createIceServer(),
     )
 
     override fun onCreate() {

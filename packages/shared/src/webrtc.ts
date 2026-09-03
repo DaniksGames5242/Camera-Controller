@@ -19,6 +19,16 @@ export const ICE_SERVERS: RTCIceServer[] = [
     username: 'openrelayproject',
     credential: 'openrelayproject',
   },
+  // Real TLS on 443 (confirmed: the server presents a valid cert for
+  // *.relay.metered.ca there) — carrier/router deep packet inspection that
+  // resets the plain-TCP TURN candidate above because it doesn't look like
+  // HTTPS generally lets this one through, since it's indistinguishable
+  // from an ordinary HTTPS connection.
+  {
+    urls: 'turns:openrelay.metered.ca:443?transport=tcp',
+    username: 'openrelayproject',
+    credential: 'openrelayproject',
+  },
 ];
 
 export function createPeerConnection(): RTCPeerConnection {
