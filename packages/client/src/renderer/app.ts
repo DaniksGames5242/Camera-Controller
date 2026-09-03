@@ -93,6 +93,8 @@ interface Session {
   video: HTMLVideoElement;
   audioSender: RTCRtpSender;
   micTrack?: MediaStreamTrack;
+  fileAudioCtx?: AudioContext;
+  fileAudioSource?: AudioBufferSourceNode;
   stream?: MediaStream;
   recorder?: MediaRecorder;
   recordingId?: string;
@@ -121,6 +123,7 @@ interface SlabChrome {
   state: HTMLElement;
   recBtn: HTMLButtonElement;
   micBtn: HTMLButtonElement;
+  soundBtn: HTMLButtonElement;
   focusBtn: HTMLButtonElement;
   closeBtn: HTMLButtonElement;
   dot: HTMLElement;
@@ -164,9 +167,10 @@ function buildSlabChrome(deviceName: string): SlabChrome {
   };
   const recBtn = mk('rec active', 'ЗАПИСЬ', 'Остановить или возобновить запись этого канала (R)');
   const micBtn = mk('mic', 'МИКРОФОН', 'Передавать звук на устройство (M)');
+  const soundBtn = mk('sound', 'ЗВУК', 'Проиграть аудиофайл на устройстве');
   const focusBtn = mk('focus', 'ФОКУС', 'Развернуть канал на всё поле');
   const closeBtn = mk('close', 'ЗАКРЫТЬ', 'Закрыть канал (Esc)');
-  actions.append(recBtn, micBtn, focusBtn, closeBtn);
+  actions.append(recBtn, micBtn, soundBtn, focusBtn, closeBtn);
 
   root.append(top, meta, actions);
   slabLayer.appendChild(root);
@@ -174,7 +178,7 @@ function buildSlabChrome(deviceName: string): SlabChrome {
   const name = new ScrambleText(nameEl, 1.6);
   name.set(deviceName);
 
-  return { root, name, clock, resolution, state, recBtn, micBtn, focusBtn, closeBtn, dot };
+  return { root, name, clock, resolution, state, recBtn, micBtn, soundBtn, focusBtn, closeBtn, dot };
 }
 
 // ---------------------------------------------------------------------------
@@ -313,6 +317,8 @@ function closeSession(deviceId: string) {
 
   stopRecording(session);
   session.micTrack?.stop();
+  session.fileAudioSource?.stop();
+  session.fileAudioCtx?.close();
   session.unsub.forEach((u) => u());
   session.pc.close();
   endCall(session.deviceId, session.callId);
@@ -518,10 +524,11 @@ function wireChrome(session: Session) {
   const { chrome, deviceId } = session;
   chrome.recBtn.onclick = () => toggleRecording(session);
   chrome.micBtn.onclick = () => toggleMic(session);
+  chrome.soundBtn.onclick = () => pickAndPlaySoundFile(session);
   chrome.focusBtn.onclick = () => focusSession(deviceId);
   chrome.closeBtn.onclick = () => closeSession(deviceId);
 
-  for (const btn of [chrome.recBtn, chrome.micBtn, chrome.focusBtn, chrome.closeBtn]) {
+  for (const btn of [chrome.recBtn, chrome.micBtn, chrome.soundBtn, chrome.focusBtn, chrome.closeBtn]) {
     registerMagnet(btn, 0.34, btn.title);
   }
 
@@ -699,6 +706,63 @@ async function toggleMic(session: Session) {
   session.micTrack.enabled = !session.micTrack.enabled;
   chrome.micBtn.classList.toggle('active', session.micTrack.enabled);
   chrome.micBtn.querySelector('span')!.textContent = session.micTrack.enabled ? 'МИК ВКЛ' : 'МИКРОФОН';
+}
+
+/**
+ * Plays a local audio file (mp3/wav/m4a/ogg/…, whatever Chromium's decoder
+ * supports) through the same sendrecv audio transceiver used for mic
+ * talk-back — decode → MediaStreamAudioDestinationNode → replaceTrack, no
+ * renegotiation needed since the transceiver already exists.
+ */
+async function pickAndPlaySoundFile(session: Session) {
+  const input = document.createElement('input');
+  input.type = 'file';
+  input.accept = 'audio/*';
+  input.onchange = async () => {
+    const file = input.files?.[0];
+    if (!file) return;
+
+    // Interrupt whatever's already playing on this session.
+    session.fileAudioSource?.stop();
+    session.fileAudioCtx?.close();
+
+    const ctx = new AudioContext();
+    session.fileAudioCtx = ctx;
+    let buffer: AudioBuffer;
+    try {
+      buffer = await ctx.decodeAudioData(await file.arrayBuffer());
+    } catch (err) {
+      console.error('audio decode failed', err);
+      toasts.push('Не удалось декодировать аудиофайл', 'error');
+      await ctx.close();
+      session.fileAudioCtx = undefined;
+      return;
+    }
+
+    const dest = ctx.createMediaStreamDestination();
+    const source = ctx.createBufferSource();
+    source.buffer = buffer;
+    source.connect(dest);
+    session.fileAudioSource = source;
+
+    await session.audioSender.replaceTrack(dest.stream.getAudioTracks()[0]);
+    session.chrome.soundBtn.classList.add('active');
+    toasts.push(`«${file.name}» → «${session.deviceName}»`, 'ok', 2600);
+    stage.interaction.burst(session.panel.x, session.panel.y, session.panel.z + 1, 0.8, 0.9);
+
+    source.onended = async () => {
+      if (session.fileAudioSource !== source) return; // superseded by a newer play
+      session.fileAudioSource = undefined;
+      session.chrome.soundBtn.classList.remove('active');
+      // Fall back to the live mic track (respecting its enabled/muted
+      // state) if one exists, otherwise go back to silence.
+      await session.audioSender.replaceTrack(session.micTrack ?? null);
+      await ctx.close();
+      if (session.fileAudioCtx === ctx) session.fileAudioCtx = undefined;
+    };
+    source.start();
+  };
+  input.click();
 }
 
 // ---------------------------------------------------------------------------

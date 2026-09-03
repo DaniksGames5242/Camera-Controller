@@ -7,6 +7,29 @@
     android:gravity="center"
     android:padding="32dp">
 
+    <!-- Placeholder text views for the setup screen; see strings.xml
+         (permissions_title / permissions_description) to fill them in. -->
+    <TextView
+        android:id="@+id/permissionsTitle"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_marginBottom="8dp"
+        android:text="@string/permissions_title"
+        android:textColor="@color/ink"
+        android:textSize="20sp"
+        android:textStyle="bold"
+        android:gravity="center" />
+
+    <TextView
+        android:id="@+id/permissionsDescription"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_marginBottom="24dp"
+        android:text="@string/permissions_description"
+        android:textColor="@color/ink_dim"
+        android:textSize="14sp"
+        android:gravity="center" />
+
     <com.mycamerascontroller.agent.holo.AgentButtonView
         android:id="@+id/grantPermissionsButton"
         android:layout_width="match_parent"

@@ -896,6 +896,8 @@ kbd {
 .slab-btn.rec.active i { background: var(--red); opacity: 1; animation: recPulse 1.15s ease-in-out infinite; }
 .slab-btn.mic.active { border-color: rgba(72, 255, 192, 0.8); color: #d6fff0; }
 .slab-btn.mic.active i { background: var(--mint); opacity: 1; }
+.slab-btn.sound.active { border-color: rgba(53, 230, 255, 0.8); color: #d6f9ff; }
+.slab-btn.sound.active i { background: var(--cyan); opacity: 1; animation: recPulse 1.15s ease-in-out infinite; }
 .slab-btn.close:hover { background: rgba(255, 77, 94, 0.22); border-color: var(--red); }
 
 .slab.leaving { opacity: 0 !important; }

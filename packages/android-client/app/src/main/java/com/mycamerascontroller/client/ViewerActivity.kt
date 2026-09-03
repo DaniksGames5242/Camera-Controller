@@ -1,6 +1,7 @@
 package com.mycamerascontroller.client
 
 import android.annotation.SuppressLint
+import android.net.Uri
 import android.os.Bundle
 import android.view.GestureDetector
 import android.view.MotionEvent
@@ -18,6 +19,7 @@ import com.mycamerascontroller.client.holo.HoloToastHost
 import com.mycamerascontroller.client.holo.HoloViewerFrame
 import com.mycamerascontroller.client.holo.Holo
 import org.webrtc.*
+import org.webrtc.audio.JavaAudioDeviceModule
 import kotlin.math.roundToInt
 
 /**
@@ -45,6 +47,7 @@ class ViewerActivity : AppCompatActivity() {
     private lateinit var hud: HoloViewerFrame
     private lateinit var toasts: HoloToastHost
     private lateinit var micButton: HoloButtonView
+    private lateinit var soundButton: HoloButtonView
     private lateinit var closeButton: HoloButtonView
     private lateinit var gestureDetector: GestureDetectorCompat
 
@@ -53,12 +56,18 @@ class ViewerActivity : AppCompatActivity() {
     private var audioTransceiver: RtpTransceiver? = null
     private var micSource: AudioSource? = null
     private var micTrack: AudioTrack? = null
+    private var audioDeviceModule: JavaAudioDeviceModule? = null
+    private var fileAudioInjector: FileAudioInjector? = null
     private var connectedAtNanos: Long = 0L
     private var closing = false
 
     private val micPermissionLauncher = registerForActivityResult(
         ActivityResultContracts.RequestPermission()
     ) { granted -> if (granted) startMic() else toasts.push(getString(R.string.toast_mic_error), HoloToastHost.Tone.ERROR) }
+
+    private val pickAudioLauncher = registerForActivityResult(
+        ActivityResultContracts.OpenDocument()
+    ) { uri -> uri?.let { playAudioFile(it) } }
 
     private lateinit var deviceId: String
     private lateinit var deviceName: String
@@ -112,6 +121,23 @@ class ViewerActivity : AppCompatActivity() {
         micButton.accent = tint
         micButton.onActivate = { onMicButtonClicked() }
 
+        soundButton = findViewById(R.id.soundButton)
+        soundButton.label = getString(R.string.play_sound_file)
+        soundButton.glyph = "🔊"
+        soundButton.accent = tint
+        soundButton.onActivate = {
+            // The WebRTC audio pipeline still touches android.media.AudioRecord
+            // briefly while it's set up, even though our callback substitutes
+            // its output — same RECORD_AUDIO gate as the mic button.
+            if (ContextCompat.checkSelfPermission(this, android.Manifest.permission.RECORD_AUDIO) ==
+                android.content.pm.PackageManager.PERMISSION_GRANTED
+            ) {
+                pickAudioLauncher.launch(arrayOf("audio/*"))
+            } else {
+                micPermissionLauncher.launch(android.Manifest.permission.RECORD_AUDIO)
+            }
+        }
+
         setUpSwipeToClose()
 
         HoloTicker.add { _, _ ->
@@ -121,7 +147,16 @@ class ViewerActivity : AppCompatActivity() {
         PeerConnectionFactory.initialize(
             PeerConnectionFactory.InitializationOptions.builder(this).createInitializationOptions()
         )
+        val injector = FileAudioInjector()
+        fileAudioInjector = injector
+        val adm = JavaAudioDeviceModule.builder(this)
+            .setSampleRate(FileAudioInjector.TARGET_SAMPLE_RATE)
+            .setUseStereoInput(false)
+            .setAudioBufferCallback(injector)
+            .createAudioDeviceModule()
+        audioDeviceModule = adm
         peerConnectionFactory = PeerConnectionFactory.builder()
+            .setAudioDeviceModule(adm)
             .setVideoEncoderFactory(DefaultVideoEncoderFactory(eglBase.eglBaseContext, true, true))
             .setVideoDecoderFactory(DefaultVideoDecoderFactory(eglBase.eglBaseContext))
             .createPeerConnectionFactory()
@@ -310,6 +345,39 @@ class ViewerActivity : AppCompatActivity() {
         micButton.engaged = true
     }
 
+    /**
+     * Decodes [uri] off the main thread, then feeds it into the same
+     * sendrecv audio track mic talk-back uses via [FileAudioInjector] +
+     * [JavaAudioDeviceModule.setAudioRecordEnabled] — see FileAudioInjector's
+     * doc comment for how that substitutes for the microphone at the SDK's
+     * own extension point rather than a native/JNI AudioDeviceModule.
+     */
+    private fun playAudioFile(uri: Uri) {
+        val injector = fileAudioInjector ?: return
+        if (micTrack == null) startMic() // ensures the outgoing audio track exists
+        val wasMicEnabled = micTrack?.enabled() ?: false
+
+        Thread {
+            val pcm = runCatching { FileAudioInjector.decodeToPcm16Mono48k(this, uri) }.getOrNull()
+            runOnUiThread {
+                if (pcm == null) {
+                    toasts.push(getString(R.string.toast_sound_decode_error), HoloToastHost.Tone.ERROR)
+                    return@runOnUiThread
+                }
+                micTrack?.setEnabled(true)
+                audioDeviceModule?.setAudioRecordEnabled(false)
+                soundButton.engaged = true
+                injector.play(pcm) {
+                    runOnUiThread {
+                        audioDeviceModule?.setAudioRecordEnabled(true)
+                        micTrack?.setEnabled(wasMicEnabled)
+                        soundButton.engaged = false
+                    }
+                }
+            }
+        }.start()
+    }
+
     override fun onDestroy() {
         micTrack?.dispose()
         micSource?.dispose()
@@ -321,6 +389,10 @@ class ViewerActivity : AppCompatActivity() {
         peerConnection?.close()
         peerConnection?.dispose()
         peerConnectionFactory?.dispose()
+        // The factory only borrows the ADM's native pointer (doesn't own
+        // it) — we're responsible for releasing it ourselves, after the
+        // factory that was using it is gone.
+        audioDeviceModule?.release()
         remoteView.release()
         eglBase.release()
         super.onDestroy()

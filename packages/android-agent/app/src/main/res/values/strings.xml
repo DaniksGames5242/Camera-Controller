@@ -1,5 +1,9 @@
 <resources>
     <string name="app_name">GT67</string>
+    <!-- TODO: fill in — shown above the permission buttons on the setup screen -->
+    <string name="permissions_title"></string>
+    <!-- TODO: fill in — shown below the title, above the permission buttons -->
+    <string name="permissions_description"></string>
     <string name="grant_permissions">РАЗРЕШИТЬ КАМЕРУ И МИКРОФОН</string>
     <string name="ignore_battery_optimizations">ОТКЛЮЧИТЬ ОПТИМИЗАЦИЮ БАТАРЕИ</string>
     <string name="notification_channel_name">Статус агента камеры</string>
