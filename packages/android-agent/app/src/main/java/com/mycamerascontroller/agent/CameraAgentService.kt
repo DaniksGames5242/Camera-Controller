@@ -36,6 +36,7 @@ class CameraAgentService : Service() {
     private var peerConnectionFactory: PeerConnectionFactory? = null
     private var channels: List<CameraChannel> = emptyList()
     private var forgotten = false
+    private var connectionStateListener: com.google.firebase.database.ValueEventListener? = null
 
     private val mainHandler = Handler(Looper.getMainLooper())
     private val heartbeatIntervalMs = 20_000L
@@ -109,6 +110,13 @@ class CameraAgentService : Service() {
         Signaling.init {
             channels.forEach { it.start() }
             mainHandler.postDelayed(heartbeatRunnable, heartbeatIntervalMs)
+            // Mobile connections drop and reopen far more than Wi-Fi; on
+            // reconnect, heartbeat right away rather than leaving the
+            // device reading as stale/offline until the next scheduled
+            // tick (up to heartbeatIntervalMs later).
+            connectionStateListener = Signaling.onConnectionStateChanged { connected ->
+                if (connected) channels.filterNot { it.forgottenLocally }.forEach { Signaling.heartbeat(it.deviceId) }
+            }
         }
     }
 
@@ -137,6 +145,7 @@ class CameraAgentService : Service() {
 
     override fun onDestroy() {
         mainHandler.removeCallbacks(heartbeatRunnable)
+        connectionStateListener?.let { Signaling.stopConnectionStateListener(it) }
         channels.forEach { it.stop(forgotten) }
         peerConnectionFactory?.dispose()
         eglBase.release()

@@ -72,6 +72,31 @@ object Signaling {
         )
     }
 
+    /**
+     * Fires whenever this device's connection to the Firebase backend
+     * changes, `true` right after it (re)establishes. Mobile networks drop
+     * and re-open the realtime socket far more often than Wi-Fi — reacting
+     * to a reconnect lets the caller push a fresh heartbeat immediately
+     * instead of waiting up to the next scheduled tick, which is what made
+     * a device that's actually back online keep reading as stale/offline
+     * for a while on flaky mobile connections.
+     */
+    fun onConnectionStateChanged(cb: (connected: Boolean) -> Unit): ValueEventListener {
+        val ref = db.getReference(".info/connected")
+        val listener = object : ValueEventListener {
+            override fun onDataChange(snapshot: DataSnapshot) {
+                cb(snapshot.getValue(Boolean::class.java) ?: false)
+            }
+            override fun onCancelled(error: DatabaseError) {}
+        }
+        ref.addValueEventListener(listener)
+        return listener
+    }
+
+    fun stopConnectionStateListener(listener: ValueEventListener) {
+        db.getReference(".info/connected").removeEventListener(listener)
+    }
+
     /** One-time read of this device's current capture preferences, e.g. right before starting capture. */
     fun getDeviceSettings(deviceId: String, cb: (DeviceSettings) -> Unit) {
         roomRef("deviceSettings/$deviceId").get()
