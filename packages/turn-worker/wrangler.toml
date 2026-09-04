@@ -1,0 +1,8 @@
+name = "mcc-turn-credentials"
+main = "src/index.ts"
+compatibility_date = "2025-01-01"
+
+# Secrets (never committed — set via `wrangler secret put <NAME>`):
+#   TURN_KEY_ID        — Cloudflare Realtime TURN Key ID
+#   TURN_KEY_API_TOKEN — Cloudflare Realtime TURN API Token
+#   ALLOWED_ROOM_ID     — same value as this project's Firebase ROOM_ID

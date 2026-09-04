@@ -230,6 +230,12 @@ class ViewerActivity : AppCompatActivity() {
 
     private fun startCall() {
         val factory = peerConnectionFactory ?: return
+        Signaling.fetchIceServers(iceServers) { fetchedIceServers ->
+            runOnUiThread { startCallWithIceServers(factory, fetchedIceServers) }
+        }
+    }
+
+    private fun startCallWithIceServers(factory: PeerConnectionFactory, iceServers: List<PeerConnection.IceServer>) {
         val id = Signaling.createCall(deviceId)
         callId = id
 

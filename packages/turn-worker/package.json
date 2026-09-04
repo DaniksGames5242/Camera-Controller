@@ -1,0 +1,12 @@
+{
+  "name": "@mcc/turn-worker",
+  "private": true,
+  "version": "0.1.0",
+  "scripts": {
+    "deploy": "wrangler deploy",
+    "secrets": "echo 'Run: wrangler secret put TURN_KEY_ID  &&  wrangler secret put TURN_KEY_API_TOKEN  &&  wrangler secret put ALLOWED_ROOM_ID'"
+  },
+  "devDependencies": {
+    "wrangler": "^3.90.0"
+  }
+}

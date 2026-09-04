@@ -63,7 +63,7 @@ async function handleCall(myId: string, callId: string, offer: SessionDescriptio
     `getUserMedia ok. video track: label=${vTrack?.label} readyState=${vTrack?.readyState} settings=${JSON.stringify(vTrack?.getSettings())}`
   );
 
-  const pc = createPeerConnection();
+  const pc = await createPeerConnection();
   stream.getTracks().forEach((track) => pc.addTrack(track, stream));
 
   // Talk-back: the viewer can optionally send their own mic audio (the

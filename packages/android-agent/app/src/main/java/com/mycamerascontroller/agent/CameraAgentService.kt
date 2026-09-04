@@ -261,11 +261,18 @@ class CameraAgentService : Service() {
             activeCallId = callId
 
             Signaling.getDeviceSettings(deviceId) { settings ->
-                startCallWithSettings(callId, offer, settings)
+                Signaling.fetchIceServers(iceServers) { fetchedIceServers ->
+                    mainHandler.post { startCallWithSettings(callId, offer, settings, fetchedIceServers) }
+                }
             }
         }
 
-        private fun startCallWithSettings(callId: String, offer: SdpPayload, settings: DeviceSettings) {
+        private fun startCallWithSettings(
+            callId: String,
+            offer: SdpPayload,
+            settings: DeviceSettings,
+            iceServers: List<PeerConnection.IceServer>,
+        ) {
             val factory = peerConnectionFactory ?: return
 
             // Camera/mic physically turn on here, and only here.

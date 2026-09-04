@@ -408,7 +408,7 @@ async function openViewer(deviceId: string, deviceName: string) {
 
   const chrome = buildSlabChrome(deviceName);
   const callId = createCall(deviceId);
-  const pc = createPeerConnection();
+  const pc = await createPeerConnection();
   const unsub: Array<() => void> = [];
 
   const audioTransceiver = pc.addTransceiver('audio', { direction: 'sendrecv' });

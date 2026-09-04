@@ -6,6 +6,11 @@ import com.google.firebase.database.DatabaseError
 import com.google.firebase.database.FirebaseDatabase
 import com.google.firebase.database.ValueEventListener
 import com.google.firebase.database.ChildEventListener
+import org.json.JSONArray
+import org.json.JSONObject
+import org.webrtc.PeerConnection
+import java.net.HttpURLConnection
+import java.net.URL
 
 // Kotlin mirror of packages/shared/src/{types,signaling}.ts — same RTDB schema,
 // same "room" concept, so agents and clients on any platform interoperate.
@@ -240,5 +245,55 @@ object Signaling {
 
     fun stopCallEndedListener(targetDeviceId: String, callId: String, listener: ValueEventListener) {
         roomRef("calls/$targetDeviceId/$callId").removeEventListener(listener)
+    }
+
+    // Fill in after deploying packages/turn-worker (see its README) — the
+    // worker's URL is public, not sensitive.
+    private const val TURN_WORKER_URL = ""
+
+    /**
+     * Fetches short-lived TURN credentials from packages/turn-worker
+     * (Cloudflare Realtime — much higher-capacity, harder-to-block
+     * infrastructure than the free openrelay.metered.ca relay used in
+     * [fallback]). Falls back to [fallback] if the worker isn't deployed
+     * yet, unreachable, or slow. Network I/O — always calls back off the
+     * calling thread.
+     */
+    fun fetchIceServers(fallback: List<PeerConnection.IceServer>, cb: (List<PeerConnection.IceServer>) -> Unit) {
+        if (TURN_WORKER_URL.isEmpty()) { cb(fallback); return }
+        Thread {
+            val servers = try {
+                val url = URL("$TURN_WORKER_URL?room=${RoomConfig.ROOM_ID}")
+                val conn = (url.openConnection() as HttpURLConnection).apply {
+                    connectTimeout = 4000
+                    readTimeout = 4000
+                    requestMethod = "GET"
+                }
+                val body = conn.inputStream.bufferedReader().use { it.readText() }
+                parseIceServers(body)
+            } catch (e: Exception) {
+                null
+            }
+            cb(servers?.takeIf { it.isNotEmpty() } ?: fallback)
+        }.start()
+    }
+
+    private fun parseIceServers(json: String): List<PeerConnection.IceServer> {
+        val entries = JSONObject(json).getJSONArray("iceServers")
+        val result = mutableListOf<PeerConnection.IceServer>()
+        for (i in 0 until entries.length()) {
+            val entry = entries.getJSONObject(i)
+            val urlsField = entry.get("urls")
+            val urls = if (urlsField is JSONArray) {
+                (0 until urlsField.length()).map { urlsField.getString(it) }
+            } else {
+                listOf(urlsField.toString())
+            }
+            val builder = PeerConnection.IceServer.builder(urls)
+            if (entry.has("username")) builder.setUsername(entry.getString("username"))
+            if (entry.has("credential")) builder.setPassword(entry.getString("credential"))
+            result.add(builder.createIceServer())
+        }
+        return result
     }
 }

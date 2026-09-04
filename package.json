@@ -19,6 +19,9 @@
   "allowScripts": {
     "electron@32.3.3": true,
     "esbuild@0.23.1": true,
-    "protobufjs@7.6.6": true
+    "protobufjs@7.6.6": true,
+    "esbuild@0.17.19": true,
+    "sharp@0.33.5": true,
+    "workerd@1.20250718.0": true
   }
 }
